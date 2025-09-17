@@ -34,7 +34,7 @@ class MongoDBManager:
     def client(self) -> AsyncIOMotorClient:
         """Return the current MongoDB client instance."""
 
-        if not self._client:
+        if self._client is None:
             raise MongoConnectionError("MongoDB client has not been initialized.")
         return self._client
 
@@ -42,7 +42,7 @@ class MongoDBManager:
     def database(self) -> AsyncIOMotorDatabase:
         """Return the current MongoDB database instance."""
 
-        if not self._database:
+        if self._database is None:
             raise MongoConnectionError("MongoDB database has not been initialized.")
         return self._database
 
@@ -50,14 +50,14 @@ class MongoDBManager:
     def collection(self) -> AsyncIOMotorCollection:
         """Return the configured time-series collection."""
 
-        if not self._collection:
+        if self._collection is None:
             raise MongoConnectionError("MongoDB collection has not been initialized.")
         return self._collection
 
     async def connect(self) -> None:
         """Create a new MongoDB connection if one does not already exist."""
 
-        if self._client:
+        if self._client is not None:
             return
 
         settings = get_settings()
@@ -122,7 +122,7 @@ class MongoDBManager:
     async def close(self) -> None:
         """Terminate the MongoDB connection."""
 
-        if self._client:
+        if self._client is not None:
             logger.info("Closing MongoDB connection")
             self._client.close()
             self._client = None

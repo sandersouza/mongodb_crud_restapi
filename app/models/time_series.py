@@ -5,16 +5,27 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 
 class TimeSeriesRecordBase(BaseModel):
     """Base attributes shared across time-series representations."""
 
-    source: str = Field(..., description="Origin identifier for the record.")
-    payload: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Arbitrary structured data describing the measurement.",
+    model_config = ConfigDict(populate_by_name=True)
+
+    source: str = Field(
+        ...,
+        validation_alias=AliasChoices("source", "acronym"),
+        serialization_alias="acronym",
+        description="Origin identifier for the record (alias: acronym).",
+    )
+    component: Optional[str] = Field(
+        default=None,
+        description="Logical component associated with the record.",
+    )
+    payload: Any = Field(
+        ...,
+        description="Arbitrary data describing the measurement (any JSON value).",
     )
     metadata: Dict[str, Any] = Field(
         default_factory=dict,
@@ -33,10 +44,19 @@ class TimeSeriesRecordCreate(TimeSeriesRecordBase):
 class TimeSeriesRecordUpdate(BaseModel):
     """Payload used for partial updates of a record."""
 
-    source: Optional[str] = Field(None, description="Updated source identifier.")
-    payload: Optional[Dict[str, Any]] = Field(
+    source: Optional[str] = Field(
         None,
-        description="Updated structured data for the record.",
+        validation_alias=AliasChoices("source", "acronym"),
+        serialization_alias="acronym",
+        description="Updated source identifier (alias: acronym).",
+    )
+    component: Optional[str] = Field(
+        None,
+        description="Updated component associated with the record.",
+    )
+    payload: Optional[Any] = Field(
+        None,
+        description="Updated data for the record.",
     )
     metadata: Optional[Dict[str, Any]] = Field(
         None,

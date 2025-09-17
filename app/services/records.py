@@ -68,7 +68,7 @@ async def create_record(
 ) -> Dict[str, Any]:
     """Insert a new time-series record into MongoDB."""
 
-    document = payload.model_dump()
+    document = payload.model_dump(by_alias=True)
     document.setdefault("timestamp", datetime.now(tz=timezone.utc))
     document["timestamp"] = _normalize_timestamp(document["timestamp"])
 
@@ -121,7 +121,9 @@ async def update_record(
     """Update an existing record with the provided fields."""
 
     oid = _object_id(record_id)
-    update_payload = {k: v for k, v in updates.model_dump(exclude_unset=True).items()}
+    update_payload = {
+        k: v for k, v in updates.model_dump(by_alias=True, exclude_unset=True).items()
+    }
 
     if "timestamp" in update_payload and isinstance(update_payload["timestamp"], datetime):
         update_payload["timestamp"] = _normalize_timestamp(update_payload["timestamp"])

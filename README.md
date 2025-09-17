@@ -33,16 +33,17 @@ O parâmetro `--reload` garante que alterações no código sejam refletidas aut
 curl -X POST http://localhost:8000/api/records \
   -H "Content-Type: application/json" \
   -d '{
-        "source": "station-01",
-        "payload": {"temperature": 26.7, "humidity": 0.42},
-        "metadata": {"city": "São Paulo"}
+        "acronym": "swe",
+        "component": "automated-prr",
+        "payload": {"healthcheck": true, "circuitbreak": true, "bulkhead": false, "ratelimit": false},
+        "metadata": {"technology": "python"}
       }'
 ```
 
 ### Exemplo de busca
 
 ```bash
-curl "http://localhost:8000/api/records/search?field=payload.temperature&value=26.7&latest=true"
+curl "http://localhost:8000/api/records/search?field=payload.healthcheck&value=true&latest=true"
 ```
 
 ## Endpoints principais
