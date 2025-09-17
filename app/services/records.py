@@ -38,6 +38,26 @@ class EmptyUpdateError(ValueError):
     """Raised when no fields are supplied for an update operation."""
 
 
+FIELD_ALIASES: Dict[str, str] = {
+    "source": "acronym",
+    "acronym": "acronym",
+    "id": "_id",
+    "_id": "_id",
+}
+
+
+def _normalize_field_path(field: str) -> str:
+    """Convert API field names into their persisted MongoDB equivalents."""
+
+    for external, internal in FIELD_ALIASES.items():
+        if field == external:
+            return internal
+        if field.startswith(f"{external}."):
+            suffix = field[len(external) :]
+            return f"{internal}{suffix}"
+    return field
+
+
 def _serialize(document: Dict[str, Any]) -> Dict[str, Any]:
     """Convert MongoDB internal fields to API friendly values."""
 
@@ -177,7 +197,11 @@ async def search_records(
     query: Dict[str, Any] = {}
 
     if field and value is not None:
-        query[field] = coerce_value(value)
+        normalized_field = _normalize_field_path(field)
+        coerced_value = coerce_value(value)
+        if normalized_field == "_id":
+            coerced_value = _object_id(str(coerced_value))
+        query[normalized_field] = coerced_value
 
     if start_time or end_time:
         range_filter: Dict[str, Any] = {}

@@ -43,6 +43,12 @@ curl -X POST http://localhost:8000/api/records \
 ### Exemplo de busca
 
 ```bash
+curl "http://localhost:8000/api/records/search?field=source&value=swe&latest=true"
+```
+
+Qualquer campo armazenado pode ser utilizado na busca, inclusive campos aninhados usando dot-notation:
+
+```bash
 curl "http://localhost:8000/api/records/search?field=payload.healthcheck&value=true&latest=true"
 ```
 
