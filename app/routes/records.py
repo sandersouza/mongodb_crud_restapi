@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from motor.motor_asyncio import AsyncIOMotorCollection
 
 from ..dependencies import get_timeseries_collection
@@ -124,18 +124,21 @@ async def update_record(
 @router.delete(
     "/{record_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
     summary="Delete a record",
 )
 async def delete_record(
     record_id: str,
     collection: AsyncIOMotorCollection = Depends(get_timeseries_collection),
-) -> None:
+) -> Response:
     """Remove a record from MongoDB."""
 
     try:
         await service.delete_record(collection, record_id)
     except Exception as error:  # noqa: BLE001
         _raise_http_error(error)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get(
