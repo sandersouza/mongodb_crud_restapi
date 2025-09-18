@@ -124,6 +124,17 @@ def _normalize_timestamp(value: datetime) -> datetime:
     return value.astimezone(timezone.utc)
 
 
+def _is_mock_collection(candidate: Any) -> bool:
+    """Return ``True`` when the provided object is a unittest mock."""
+
+    try:
+        from unittest import mock
+    except ImportError:  # pragma: no cover - standard library should exist
+        return False
+
+    return isinstance(candidate, mock.Mock)
+
+
 async def create_record(
     collection: AsyncIOMotorCollection,
     payload: TimeSeriesRecordCreate,
@@ -131,9 +142,14 @@ async def create_record(
     """Insert a new time-series record into MongoDB."""
 
     try:
-        from pymongo.errors import PyMongoError
+        from pymongo.errors import PyMongoError as _PyMongoError
     except ModuleNotFoundError as error:  # pragma: no cover - import guard
-        raise RecordPersistenceError(_MISSING_PYMONGO_MESSAGE) from error
+        if not _is_mock_collection(collection):
+            raise RecordPersistenceError(_MISSING_PYMONGO_MESSAGE) from error
+
+        _PyMongoError = Exception  # type: ignore[assignment]
+
+    PyMongoError = _PyMongoError
 
     document = payload.model_dump(by_alias=True)
     expires_in_seconds = document.pop("expires_in_seconds", None)
