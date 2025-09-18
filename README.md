@@ -48,6 +48,13 @@ curl -X POST http://localhost:8000/api/tokens \
       }'
 ```
 
+Exemplo de listagem dos tokens existentes (filtrando opcionalmente por base específica):
+
+```bash
+curl "http://localhost:8000/api/tokens?database=validationsplugin" \
+  -H "Authorization: Bearer ${API_ADMIN_TOKEN}"
+```
+
 A resposta conterá o campo `token` (exibido apenas uma vez); armazene-o com segurança. Todos os tokens são guardados no MongoDB utilizando hash SHA-256 e têm o campo `last_used_at` atualizado sempre que forem utilizados.
 
 ### Exemplo de escrita rápida via `curl`

@@ -21,7 +21,7 @@ if settings.enable_token_creation_route:
         "",
         status_code=status.HTTP_201_CREATED,
         response_model=APITokenResponse,
-        include_in_schema=False,
+        include_in_schema=True,
         summary="Create a new API token",
     )
     async def create_api_token(
@@ -60,7 +60,7 @@ if settings.enable_token_creation_route:
     @router.get(
         "",
         response_model=List[APITokenStoredResponse],
-        include_in_schema=False,
+        include_in_schema=True,
         summary="List stored API tokens",
     )
     async def list_api_tokens(
@@ -97,7 +97,7 @@ if settings.enable_token_creation_route:
         status_code=status.HTTP_204_NO_CONTENT,
         response_class=Response,
         response_model=None,
-        include_in_schema=False,
+        include_in_schema=True,
         summary="Revoke an API token",
     )
     async def revoke_api_token(
