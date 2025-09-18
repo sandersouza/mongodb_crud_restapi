@@ -1,7 +1,7 @@
 {
 	"info": {
-		"_postman_id": "a736d296-874f-458d-8ee6-e299bf108883",
-		"name": "MongoDB CRUD API",
+		"_postman_id": "cba7a2a2-5336-4eeb-abad-ba50892f1ec4",
+		"name": "MongoDB CRUD API Copy",
 		"description": "Coleção Postman com exemplos de uso das rotas da MongoDB CRUD REST API.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "7587829"
@@ -274,67 +274,9 @@
 								"tokens"
 							]
 						},
-                                                "description": "Emite um novo token associado à base informada. Para visualizar a rota na documentação pública, defina SHOW_TOKEN_CREATION_ROUTE=true."
+						"description": "Emite um novo token associado à base informada. Para visualizar a rota na documentação pública, defina SHOW_TOKEN_CREATION_ROUTE=true."
 					},
-					"response": [
-						{
-							"name": "Token criado",
-							"originalRequest": {
-								"auth": {
-									"type": "bearer",
-									"bearer": [
-										{
-											"key": "token",
-											"value": "{{adminToken}}",
-											"type": "string"
-										}
-									]
-								},
-								"method": "POST",
-								"header": [
-									{
-										"key": "Authorization",
-										"value": "Bearer {{adminToken}}"
-									},
-									{
-										"key": "Content-Type",
-										"value": "application/json"
-									}
-								],
-								"body": {
-									"mode": "raw",
-									"raw": "{\n  \"database\": \"validationsplugin\",\n  \"description\": \"commandline_tool\"\n}",
-									"options": {
-										"raw": {
-											"language": "json"
-										}
-									}
-								},
-								"url": {
-									"raw": "{{baseUrl}}/api/tokens",
-									"host": [
-										"{{baseUrl}}"
-									],
-									"path": [
-										"api",
-										"tokens"
-									]
-								},
-                                                                "description": "Emite um novo token associado à base informada. Para visualizar a rota na documentação pública, defina SHOW_TOKEN_CREATION_ROUTE=true."
-							},
-							"status": "Created",
-							"code": 201,
-							"_postman_previewlanguage": "Text",
-							"header": [
-								{
-									"key": "Content-Type",
-									"value": "application/json"
-								}
-							],
-							"cookie": [],
-							"body": "{\n  \"token\": \"<novo-token>\",\n  \"database\": \"validationsplugin\",\n  \"description\": \"Token de teste\",\n  \"created_at\": \"2024-01-01T00:00:00Z\",\n  \"last_used_at\": null\n}"
-						}
-					]
+					"response": []
 				},
 				{
 					"name": "List Tokens",
@@ -374,6 +316,42 @@
 							]
 						},
 						"description": "Lista os tokens armazenados e permite filtrar por uma base específica quando necessário."
+					},
+					"response": []
+				},
+				{
+					"name": "Revoke Token",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/tokens/validationsplugin/{{tokenId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tokens",
+								"validationsplugin",
+								"{{tokenId}}"
+							]
+						},
+						"description": "Revoga o token identificado pelo ID informado para a base selecionada."
 					},
 					"response": []
 				}
@@ -422,6 +400,11 @@
 			"key": "recordId",
 			"value": "64b000000000000000000000",
 			"description": "ObjectId usado nos exemplos de rotas que requerem um ID válido. Substitua após criar um registro."
+		},
+		{
+			"key": "tokenId",
+			"value": "64b000000000000000000000",
+			"description": "ID do token utilizado pelos exemplos administrativos. Atualize com o valor retornado pelo endpoint de listagem."
 		},
 		{
 			"key": "apiToken",
