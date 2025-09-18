@@ -3,10 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import AsyncGenerator, Optional
+from typing import AsyncGenerator, Optional, TYPE_CHECKING
 
 from fastapi import Depends, Header, HTTPException, status
-from motor.motor_asyncio import AsyncIOMotorCollection
 
 from .core.config import get_settings
 from .db.mongo import MongoConnectionError, mongo_manager
@@ -15,6 +14,9 @@ from .services.tokens import (
     TokenPersistenceError,
     fetch_token_metadata,
 )
+
+if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
+    from motor.motor_asyncio import AsyncIOMotorCollection
 
 AUTHORIZATION_HEADER = "Authorization"
 DATABASE_OVERRIDE_HEADER = "X-Database-Name"

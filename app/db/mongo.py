@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional, Tuple
+from typing import Dict, Optional, Tuple, TYPE_CHECKING
 
-from motor.motor_asyncio import (
-    AsyncIOMotorClient,
-    AsyncIOMotorCollection,
-    AsyncIOMotorDatabase,
-)
 from pymongo import ASCENDING
 from pymongo.errors import CollectionInvalid, PyMongoError, ServerSelectionTimeoutError
+
+if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
+    from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
 
 from ..core.config import get_settings
 
@@ -48,6 +46,13 @@ class MongoDBManager:
 
         settings = get_settings()
         logger.info("Connecting to MongoDB at %s", settings.mongodb_uri)
+
+        try:
+            from motor.motor_asyncio import AsyncIOMotorClient  # type: ignore import-not-found
+        except ModuleNotFoundError as error:  # pragma: no cover - defensive guard
+            raise MongoConnectionError(
+                "The 'motor' package is required to connect to MongoDB. Install it with `pip install motor`."
+            ) from error
 
         connection_kwargs = {"maxPoolSize": settings.mongodb_max_pool_size}
         if settings.mongodb_username and settings.mongodb_password:
