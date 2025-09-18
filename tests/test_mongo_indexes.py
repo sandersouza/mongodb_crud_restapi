@@ -52,7 +52,6 @@ async def test_ensure_indexes_recreates_plain_index_when_ttl_present(
     assert collection.drop_index.await_args_list == [call("timestamp_1")]
     assert collection.create_index.await_args_list == [
         call([("timestamp", ASCENDING)], name="timestamp_1"),
-        call([("expires_at", ASCENDING)], name="expires_at_ttl", expireAfterSeconds=0),
     ]
 
 
@@ -67,10 +66,6 @@ async def test_ensure_indexes_is_idempotent_with_expected_indexes(
     collection.index_information = AsyncMock(
         return_value={
             "timestamp_1": {"key": [("timestamp", ASCENDING)]},
-            "expires_at_ttl": {
-                "key": [("expires_at", ASCENDING)],
-                "expireAfterSeconds": 0,
-            },
         }
     )
     collection.drop_index = AsyncMock()
@@ -85,10 +80,10 @@ async def test_ensure_indexes_is_idempotent_with_expected_indexes(
 
 
 @pytest.mark.anyio
-async def test_ensure_indexes_creates_missing_indexes(
+async def test_ensure_indexes_creates_missing_timestamp_index(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ensure both timestamp and TTL indexes are created when absent."""
+    """Ensure the timestamp index is created when absent."""
 
     manager = MongoDBManager()
     collection = AsyncMock()
@@ -103,15 +98,14 @@ async def test_ensure_indexes_creates_missing_indexes(
     collection.drop_index.assert_not_awaited()
     assert collection.create_index.await_args_list == [
         call([("timestamp", ASCENDING)], name="timestamp_1"),
-        call([("expires_at", ASCENDING)], name="expires_at_ttl", expireAfterSeconds=0),
     ]
 
 
 @pytest.mark.anyio
-async def test_ensure_indexes_replaces_incorrect_ttl_index(
+async def test_ensure_indexes_drops_incorrect_ttl_index(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ensure TTL indexes with wrong settings are recreated."""
+    """Ensure TTL indexes with wrong settings are removed."""
 
     manager = MongoDBManager()
     collection = AsyncMock()
@@ -132,16 +126,42 @@ async def test_ensure_indexes_replaces_incorrect_ttl_index(
     await manager._ensure_indexes(collection)
 
     assert collection.drop_index.await_args_list == [call("expires_at_ttl")]
-    assert collection.create_index.await_args_list == [
-        call([("expires_at", ASCENDING)], name="expires_at_ttl", expireAfterSeconds=0),
-    ]
+    assert collection.create_index.await_args_list == []
 
 
 @pytest.mark.anyio
-async def test_ensure_indexes_replaces_legacy_ttl_index_name(
+async def test_ensure_indexes_drops_ttl_missing_partial_filter(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Ensure legacy TTL index names are replaced with the canonical one."""
+    """Ensure TTL indexes without the expected partial filter are removed."""
+
+    manager = MongoDBManager()
+    collection = AsyncMock()
+    collection.index_information = AsyncMock(
+        return_value={
+            "timestamp_1": {"key": [("timestamp", ASCENDING)]},
+            "expires_at_ttl": {
+                "key": [("expires_at", ASCENDING)],
+                "expireAfterSeconds": 0,
+            },
+        }
+    )
+    collection.drop_index = AsyncMock()
+    collection.create_index = AsyncMock()
+
+    monkeypatch.setattr("app.db.mongo.get_settings", lambda: _FakeSettings())
+
+    await manager._ensure_indexes(collection)
+
+    assert collection.drop_index.await_args_list == [call("expires_at_ttl")]
+    assert collection.create_index.await_args_list == []
+
+
+@pytest.mark.anyio
+async def test_ensure_indexes_drops_legacy_ttl_index_name(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure legacy TTL index names are removed entirely."""
 
     manager = MongoDBManager()
     collection = AsyncMock()
@@ -162,9 +182,7 @@ async def test_ensure_indexes_replaces_legacy_ttl_index_name(
     await manager._ensure_indexes(collection)
 
     assert collection.drop_index.await_args_list == [call("expires_at_1")]
-    assert collection.create_index.await_args_list == [
-        call([("expires_at", ASCENDING)], name="expires_at_ttl", expireAfterSeconds=0),
-    ]
+    assert collection.create_index.await_args_list == []
 
 
 @pytest.mark.anyio

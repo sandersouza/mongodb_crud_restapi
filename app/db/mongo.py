@@ -196,28 +196,8 @@ class MongoDBManager:
                     existing_ttl = index_info
                     break
 
-            ttl_specification: List[Tuple[str, int]] = [("expires_at", ASCENDING)]
-            ttl_kwargs = {"name": ttl_index_name, "expireAfterSeconds": 0}
-
-            if existing_ttl is None:
-                await collection.create_index(ttl_specification, **ttl_kwargs)
-            else:
-                ttl_keys = existing_ttl.get("key") if existing_ttl is not None else None
-                ttl_expire_after = existing_ttl.get("expireAfterSeconds")
-                needs_ttl_recreation = False
-
-                if ttl_keys is None or list(ttl_keys) != ttl_specification:
-                    needs_ttl_recreation = True
-
-                if ttl_expire_after not in (0, 0.0):
-                    needs_ttl_recreation = True
-
-                if existing_ttl_name != ttl_index_name:
-                    needs_ttl_recreation = True
-
-                if needs_ttl_recreation:
-                    await collection.drop_index(existing_ttl_name)
-                    await collection.create_index(ttl_specification, **ttl_kwargs)
+            if existing_ttl is not None:
+                await collection.drop_index(existing_ttl_name)
         except PyMongoError as error:
             logger.exception("Failed to ensure indexes: %s", error)
             raise MongoConnectionError("Failed to ensure MongoDB indexes.") from error
