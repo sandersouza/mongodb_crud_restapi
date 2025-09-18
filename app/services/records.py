@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import copy
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from bson import ObjectId
 from motor.motor_asyncio import AsyncIOMotorCollection
 from pymongo import DESCENDING, ReturnDocument
-from pymongo.errors import PyMongoError
+from pymongo.errors import OperationFailure, PyMongoError
 
-from ..models.time_series import TimeSeriesRecordCreate, TimeSeriesRecordUpdate
+from ..models.time_series import (
+    TimeSeriesRecordCreate,
+    TimeSeriesRecordOut,
+    TimeSeriesRecordUpdate,
+)
 from ..utils.parsing import coerce_value
 
 
@@ -38,24 +43,47 @@ class EmptyUpdateError(ValueError):
     """Raised when no fields are supplied for an update operation."""
 
 
-FIELD_ALIASES: Dict[str, str] = {
-    "source": "acronym",
-    "acronym": "acronym",
-    "id": "_id",
-    "_id": "_id",
-}
+def _build_field_aliases() -> Dict[str, str]:
+    """Derive API-to-database field aliases from the Pydantic schema."""
+
+    aliases: Dict[str, str] = {"_id": "_id", "id": "_id"}
+
+    for field_name, field in TimeSeriesRecordOut.model_fields.items():
+        target = field.serialization_alias or field_name
+
+        # The `id` attribute must always resolve to MongoDB's `_id` key.
+        if field_name == "id":
+            target = "_id"
+
+        aliases[field_name.lower()] = target
+
+        validation_alias = getattr(field.validation_alias, "choices", None)
+        if validation_alias:
+            for alias in validation_alias:
+                aliases[str(alias).lower()] = target
+
+        if field.serialization_alias:
+            aliases[field.serialization_alias.lower()] = target
+
+    return aliases
+
+
+FIELD_ALIASES: Dict[str, str] = _build_field_aliases()
 
 
 def _normalize_field_path(field: str) -> str:
     """Convert API field names into their persisted MongoDB equivalents."""
 
+    sanitized = field.strip()
+    lookup_key = sanitized.lower()
+
     for external, internal in FIELD_ALIASES.items():
-        if field == external:
+        if lookup_key == external:
             return internal
-        if field.startswith(f"{external}."):
-            suffix = field[len(external) :]
+        if lookup_key.startswith(f"{external}."):
+            suffix = sanitized[len(external) :]
             return f"{internal}{suffix}"
-    return field
+    return sanitized
 
 
 def _serialize(document: Dict[str, Any]) -> Dict[str, Any]:
@@ -152,18 +180,133 @@ async def update_record(
         raise EmptyUpdateError("At least one field must be provided for update.")
 
     try:
-        document = await collection.find_one_and_update(
-            {"_id": oid},
-            {"$set": update_payload},
-            return_document=ReturnDocument.AFTER,
+        document = await _apply_update(
+            collection=collection,
+            oid=oid,
+            update_payload=update_payload,
         )
     except PyMongoError as exc:
         raise RecordPersistenceError("Failed to update the record in MongoDB.") from exc
 
-    if document is None:
+    return _serialize(document)
+
+
+async def _apply_update(
+    collection: AsyncIOMotorCollection,
+    oid: ObjectId,
+    update_payload: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Apply an update honoring MongoDB time-series constraints."""
+
+    metadata_only = set(update_payload.keys()) <= {"metadata"}
+    metadata_exception: Optional[OperationFailure] = None
+
+    if metadata_only:
+        try:
+            document = await collection.find_one_and_update(
+                {"_id": oid},
+                {"$set": update_payload},
+                return_document=ReturnDocument.AFTER,
+            )
+        except OperationFailure as error:
+            if not _is_timeseries_restriction(error):
+                raise
+            metadata_exception = error
+        else:
+            if document is None:
+                raise RecordNotFoundError("Record not found for update.")
+            return document
+
+    if metadata_only and metadata_exception is None:
+        # Metadata update failed because the document no longer exists.
         raise RecordNotFoundError("Record not found for update.")
 
-    return _serialize(document)
+    return await _replace_document(
+        collection=collection,
+        oid=oid,
+        update_payload=update_payload,
+    )
+
+
+async def _replace_document(
+    collection: AsyncIOMotorCollection,
+    oid: ObjectId,
+    update_payload: Dict[str, Any],
+    existing_document: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Replace a document to emulate updates on measurement fields."""
+
+    if existing_document is None:
+        existing_document = await collection.find_one({"_id": oid})
+
+    if existing_document is None:
+        raise RecordNotFoundError("Record not found for update.")
+
+    replacement = copy.deepcopy(existing_document)
+    replacement.update(update_payload)
+    replacement["_id"] = existing_document["_id"]
+
+    try:
+        result = await collection.replace_one({"_id": oid}, replacement)
+    except OperationFailure as error:
+        if _is_timeseries_restriction(error):
+            document = await _delete_and_reinsert(
+                collection=collection,
+                original=existing_document,
+                replacement=replacement,
+            )
+            return document
+        raise
+
+    if result.matched_count == 0:
+        raise RecordNotFoundError("Record not found for update.")
+
+    return await _reload_document(collection, oid)
+
+
+async def _delete_and_reinsert(
+    collection: AsyncIOMotorCollection,
+    original: Dict[str, Any],
+    replacement: Dict[str, Any],
+) -> Dict[str, Any]:
+    """Fallback strategy when direct updates are rejected by MongoDB."""
+
+    delete_result = await collection.delete_one({"_id": original["_id"]})
+    if delete_result.deleted_count == 0:
+        raise RecordNotFoundError("Record not found for update.")
+
+    replacement["_id"] = original["_id"]
+
+    try:
+        await collection.insert_one(replacement)
+    except PyMongoError as error:
+        # Attempt to restore the original document if reinsertion fails.
+        try:
+            await collection.insert_one(copy.deepcopy(original))
+        except PyMongoError:
+            pass
+        raise error
+
+    return await _reload_document(collection, original["_id"])
+
+
+async def _reload_document(
+    collection: AsyncIOMotorCollection,
+    oid: ObjectId,
+) -> Dict[str, Any]:
+    """Retrieve a document after an update operation has completed."""
+
+    document = await collection.find_one({"_id": oid})
+    if document is None:
+        raise RecordPersistenceError("Failed to load the updated record from MongoDB.")
+    return document
+
+
+def _is_timeseries_restriction(error: OperationFailure) -> bool:
+    """Return ``True`` when MongoDB rejects updates due to time-series rules."""
+
+    message = str(error).lower()
+    return "time-series" in message or "time series" in message or "metafield" in message
 
 
 async def delete_record(

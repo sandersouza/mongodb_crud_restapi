@@ -81,66 +81,8 @@ async def list_records(
 
     return [TimeSeriesRecordOut.model_validate(document) for document in documents]
 
-
-@router.get(
-    "/{record_id}",
-    response_model=TimeSeriesRecordOut,
-    summary="Retrieve a specific record",
-)
-async def get_record(
-    record_id: str,
-    collection: AsyncIOMotorCollection = Depends(get_timeseries_collection),
-) -> TimeSeriesRecordOut:
-    """Fetch a record by its identifier."""
-
-    try:
-        document = await service.fetch_record(collection, record_id)
-    except Exception as error:  # noqa: BLE001
-        _raise_http_error(error)
-
-    return TimeSeriesRecordOut.model_validate(document)
-
-
-@router.put(
-    "/{record_id}",
-    response_model=TimeSeriesRecordOut,
-    summary="Update an existing record",
-)
-async def update_record(
-    record_id: str,
-    updates: TimeSeriesRecordUpdate,
-    collection: AsyncIOMotorCollection = Depends(get_timeseries_collection),
-) -> TimeSeriesRecordOut:
-    """Update fields for an existing record."""
-
-    try:
-        document = await service.update_record(collection, record_id, updates)
-    except Exception as error:  # noqa: BLE001
-        _raise_http_error(error)
-
-    return TimeSeriesRecordOut.model_validate(document)
-
-
-@router.delete(
-    "/{record_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    response_class=Response,
-    summary="Delete a record",
-)
-async def delete_record(
-    record_id: str,
-    collection: AsyncIOMotorCollection = Depends(get_timeseries_collection),
-) -> Response:
-    """Remove a record from MongoDB."""
-
-    try:
-        await service.delete_record(collection, record_id)
-    except Exception as error:  # noqa: BLE001
-        _raise_http_error(error)
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
+# NOTE: Register this static route before any dynamic ``/{record_id}`` paths
+# to ensure FastAPI resolves ``/search`` correctly.
 @router.get(
     "/search",
     response_model=TimeSeriesSearchResponse,
@@ -201,3 +143,64 @@ async def search_records(
 
     items = [TimeSeriesRecordOut.model_validate(document) for document in documents]
     return TimeSeriesSearchResponse(latest=only_latest, count=len(items), items=items)
+
+
+@router.get(
+    "/{record_id}",
+    response_model=TimeSeriesRecordOut,
+    summary="Retrieve a specific record",
+)
+async def get_record(
+    record_id: str,
+    collection: AsyncIOMotorCollection = Depends(get_timeseries_collection),
+) -> TimeSeriesRecordOut:
+    """Fetch a record by its identifier."""
+
+    try:
+        document = await service.fetch_record(collection, record_id)
+    except Exception as error:  # noqa: BLE001
+        _raise_http_error(error)
+
+    return TimeSeriesRecordOut.model_validate(document)
+
+
+@router.put(
+    "/{record_id}",
+    response_model=TimeSeriesRecordOut,
+    summary="Update an existing record",
+)
+async def update_record(
+    record_id: str,
+    updates: TimeSeriesRecordUpdate,
+    collection: AsyncIOMotorCollection = Depends(get_timeseries_collection),
+) -> TimeSeriesRecordOut:
+    """Update fields for an existing record."""
+
+    try:
+        document = await service.update_record(collection, record_id, updates)
+    except Exception as error:  # noqa: BLE001
+        _raise_http_error(error)
+
+    return TimeSeriesRecordOut.model_validate(document)
+
+
+@router.delete(
+    "/{record_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    summary="Delete a record",
+)
+async def delete_record(
+    record_id: str,
+    collection: AsyncIOMotorCollection = Depends(get_timeseries_collection),
+) -> Response:
+    """Remove a record from MongoDB."""
+
+    try:
+        await service.delete_record(collection, record_id)
+    except Exception as error:  # noqa: BLE001
+        _raise_http_error(error)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
