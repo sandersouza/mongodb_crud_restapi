@@ -40,7 +40,12 @@ def client_without_token(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 def client(client_without_token: TestClient) -> TestClient:
     """Provide a test client with the administrator token pre-configured."""
 
-    client_without_token.headers.update({"Authorization": "Bearer test-admin-token"})
+    client_without_token.headers.update(
+        {
+            "Authorization": "Bearer test-admin-token",
+            "X-Database-Name": "test-measurements",
+        }
+    )
     return client_without_token
 
 

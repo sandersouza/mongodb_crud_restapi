@@ -25,7 +25,7 @@ class TokenContext:
     """Information about the caller extracted from the API token."""
 
     token: str
-    database_name: str
+    database_name: Optional[str]
     is_admin: bool
 
 
@@ -84,8 +84,7 @@ async def get_token_context(
     override = database_override.strip() if database_override else None
 
     if token == settings.api_admin_token:
-        database_name = override or settings.mongodb_database
-        return TokenContext(token=token, database_name=database_name, is_admin=True)
+        return TokenContext(token=token, database_name=override, is_admin=True)
 
     try:
         metadata = await fetch_token_metadata(token)
@@ -120,6 +119,12 @@ async def get_timeseries_collection(
     context: TokenContext = Depends(get_token_context),
 ) -> AsyncGenerator[AsyncIOMotorCollection, None]:
     """Provide a MongoDB collection based on the caller token context."""
+
+    if context.database_name is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail="A target database must be provided using the X-Database-Name header.",
+        )
 
     try:
         collection = await mongo_manager.get_timeseries_collection_for_database(

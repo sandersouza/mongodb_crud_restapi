@@ -73,19 +73,12 @@ async def fetch_token_metadata(token: str) -> TokenMetadata:
     Updates the ``last_used_at`` field upon successful retrieval.
     """
 
-    try:
-        collection = mongo_manager.token_collection
-    except MongoConnectionError as error:  # pragma: no cover - sanity guard
-        raise TokenPersistenceError("Token storage is not available.") from error
-
     token_hash = _hash_token(token)
 
-    _, PyMongoError = _require_pymongo_errors()
     try:
-        document = await collection.find_one({"token_hash": token_hash})
-    except PyMongoError as error:
-        logger.exception("Failed to fetch API token metadata: %s", error)
-        raise TokenPersistenceError("Unable to query stored API tokens.") from error
+        document, collection = await mongo_manager.find_token_document(token_hash)
+    except MongoConnectionError as error:  # pragma: no cover - sanity guard
+        raise TokenPersistenceError("Token storage is not available.") from error
 
     if document is None:
         raise TokenNotFoundError("Invalid API token.")
@@ -96,6 +89,8 @@ async def fetch_token_metadata(token: str) -> TokenMetadata:
         created_at=document["created_at"],
         last_used_at=document.get("last_used_at"),
     )
+
+    _, PyMongoError = _require_pymongo_errors()
 
     try:
         await collection.update_one(
@@ -128,7 +123,7 @@ async def create_token(
         raise TokenPersistenceError("Unable to prepare the requested database.") from error
 
     try:
-        collection = mongo_manager.token_collection
+        collection = await mongo_manager.get_token_collection_for_database(database)
     except MongoConnectionError as error:  # pragma: no cover - sanity guard
         raise TokenPersistenceError("Token storage is not available.") from error
 
@@ -152,6 +147,8 @@ async def create_token(
     except PyMongoError as error:
         logger.exception("Failed to persist API token: %s", error)
         raise TokenPersistenceError("Unable to store the new API token.") from error
+
+    mongo_manager.remember_token_location(token_hash, database)
 
     return CreatedToken(
         token=token_secret,

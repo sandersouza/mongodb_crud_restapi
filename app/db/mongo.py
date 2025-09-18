@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, Tuple
 
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
@@ -27,11 +27,10 @@ class MongoDBManager:
 
     def __init__(self) -> None:
         self._client: Optional[AsyncIOMotorClient] = None
-        self._database: Optional[AsyncIOMotorDatabase] = None
-        self._collection: Optional[AsyncIOMotorCollection] = None
-        self._token_collection: Optional[AsyncIOMotorCollection] = None
         self._database_cache: Dict[str, AsyncIOMotorDatabase] = {}
         self._collection_cache: Dict[str, AsyncIOMotorCollection] = {}
+        self._token_collection_cache: Dict[str, AsyncIOMotorCollection] = {}
+        self._token_hash_cache: Dict[str, str] = {}
 
     @property
     def client(self) -> AsyncIOMotorClient:
@@ -40,30 +39,6 @@ class MongoDBManager:
         if self._client is None:
             raise MongoConnectionError("MongoDB client has not been initialized.")
         return self._client
-
-    @property
-    def database(self) -> AsyncIOMotorDatabase:
-        """Return the current MongoDB database instance."""
-
-        if self._database is None:
-            raise MongoConnectionError("MongoDB database has not been initialized.")
-        return self._database
-
-    @property
-    def collection(self) -> AsyncIOMotorCollection:
-        """Return the configured time-series collection."""
-
-        if self._collection is None:
-            raise MongoConnectionError("MongoDB collection has not been initialized.")
-        return self._collection
-
-    @property
-    def token_collection(self) -> AsyncIOMotorCollection:
-        """Return the collection that stores API tokens."""
-
-        if self._token_collection is None:
-            raise MongoConnectionError("MongoDB token collection has not been initialized.")
-        return self._token_collection
 
     async def connect(self) -> None:
         """Create a new MongoDB connection if one does not already exist."""
@@ -88,13 +63,8 @@ class MongoDBManager:
 
         self._database_cache.clear()
         self._collection_cache.clear()
-
-        default_database = await self._get_database(settings.mongodb_database)
-        self._database = default_database
-        self._collection = await self._ensure_timeseries_collection(
-            default_database, settings.mongodb_database
-        )
-        await self._ensure_token_collection(default_database)
+        self._token_collection_cache.clear()
+        self._token_hash_cache.clear()
 
     async def _get_database(self, database_name: str) -> AsyncIOMotorDatabase:
         """Return (and cache) a database instance, creating it if necessary."""
@@ -156,8 +126,14 @@ class MongoDBManager:
             logger.exception("Failed to ensure indexes: %s", error)
             raise MongoConnectionError("Failed to ensure MongoDB indexes.") from error
 
-    async def _ensure_token_collection(self, database: AsyncIOMotorDatabase) -> None:
+    async def _ensure_token_collection(
+        self, database: AsyncIOMotorDatabase
+    ) -> AsyncIOMotorCollection:
         """Create the collection responsible for storing API tokens."""
+
+        database_name = database.name
+        if database_name in self._token_collection_cache:
+            return self._token_collection_cache[database_name]
 
         settings = get_settings()
         collection_name = settings.api_tokens_collection
@@ -167,7 +143,7 @@ class MongoDBManager:
             logger.info(
                 "Creating API token collection %s in database %s",
                 collection_name,
-                database.name,
+                database_name,
             )
             await database.create_collection(collection_name)
 
@@ -178,7 +154,8 @@ class MongoDBManager:
             logger.exception("Failed to ensure API token indexes: %s", error)
             raise MongoConnectionError("Failed to ensure MongoDB token indexes.") from error
 
-        self._token_collection = collection
+        self._token_collection_cache[database_name] = collection
+        return collection
 
     async def get_timeseries_collection_for_database(
         self, database_name: str
@@ -191,6 +168,95 @@ class MongoDBManager:
         database = await self._get_database(database_name)
         return await self._ensure_timeseries_collection(database, database_name)
 
+    async def get_token_collection_for_database(
+        self, database_name: str
+    ) -> AsyncIOMotorCollection:
+        """Return the token collection stored inside ``database_name``."""
+
+        database = await self._get_database(database_name)
+        return await self._ensure_token_collection(database)
+
+    def remember_token_location(self, token_hash: str, database_name: str) -> None:
+        """Cache the database where ``token_hash`` is persisted."""
+
+        self._token_hash_cache[token_hash] = database_name
+
+    async def find_token_document(
+        self, token_hash: str
+    ) -> Tuple[Optional[dict], Optional[AsyncIOMotorCollection]]:
+        """Locate the token document associated with ``token_hash`` across databases."""
+
+        if self._client is None:
+            raise MongoConnectionError("MongoDB client has not been initialized.")
+
+        settings = get_settings()
+
+        cached_database = self._token_hash_cache.get(token_hash)
+        if cached_database is not None:
+            try:
+                collection = await self.get_token_collection_for_database(cached_database)
+            except MongoConnectionError:
+                self._token_hash_cache.pop(token_hash, None)
+            else:
+                try:
+                    document = await collection.find_one({"token_hash": token_hash})
+                except PyMongoError as error:
+                    logger.exception("Failed to fetch API token metadata: %s", error)
+                    raise MongoConnectionError("Failed to query MongoDB for API tokens.") from error
+
+                if document is not None:
+                    return document, collection
+
+                self._token_hash_cache.pop(token_hash, None)
+
+        for database_name, collection in list(self._token_collection_cache.items()):
+            try:
+                document = await collection.find_one({"token_hash": token_hash})
+            except PyMongoError as error:
+                logger.exception("Failed to fetch API token metadata: %s", error)
+                raise MongoConnectionError("Failed to query MongoDB for API tokens.") from error
+
+            if document is not None:
+                self._token_hash_cache[token_hash] = database_name
+                return document, collection
+
+        database_names = await self._client.list_database_names()
+        system_databases = {"admin", "config", "local"}
+        for database_name in database_names:
+            if database_name in self._token_collection_cache or database_name in system_databases:
+                continue
+
+            database = self._database_cache.get(database_name)
+            if database is None:
+                database = self._client[database_name]
+                self._database_cache[database_name] = database
+
+            try:
+                existing_collections = await database.list_collection_names()
+            except PyMongoError as error:
+                logger.exception(
+                    "Failed to inspect database %s for API tokens: %s",
+                    database_name,
+                    error,
+                )
+                raise MongoConnectionError("Failed to query MongoDB for API tokens.") from error
+            if settings.api_tokens_collection not in existing_collections:
+                continue
+
+            collection = await self._ensure_token_collection(database)
+
+            try:
+                document = await collection.find_one({"token_hash": token_hash})
+            except PyMongoError as error:
+                logger.exception("Failed to fetch API token metadata: %s", error)
+                raise MongoConnectionError("Failed to query MongoDB for API tokens.") from error
+
+            if document is not None:
+                self._token_hash_cache[token_hash] = database_name
+                return document, collection
+
+        return None, None
+
     async def close(self) -> None:
         """Terminate the MongoDB connection."""
 
@@ -198,11 +264,10 @@ class MongoDBManager:
             logger.info("Closing MongoDB connection")
             self._client.close()
             self._client = None
-            self._database = None
-            self._collection = None
-            self._token_collection = None
             self._database_cache = {}
             self._collection_cache = {}
+            self._token_collection_cache = {}
+            self._token_hash_cache = {}
 
 
 mongo_manager = MongoDBManager()

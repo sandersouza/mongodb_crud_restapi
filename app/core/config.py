@@ -55,7 +55,6 @@ class Settings(BaseSettings):
     mongodb_uri: str = Field(default=..., alias="MONGODB_URI")
     mongodb_username: Optional[str] = Field(default=None, alias="MONGODB_USERNAME")
     mongodb_password: Optional[str] = Field(default=None, alias="MONGODB_PASSWORD")
-    mongodb_database: str = Field(default=..., alias="MONGODB_DATABASE")
     mongodb_collection: str = Field(default="measurements", alias="MONGODB_COLLECTION")
     mongodb_max_pool_size: int = Field(default=10, alias="MONGODB_MAX_POOL_SIZE")
 

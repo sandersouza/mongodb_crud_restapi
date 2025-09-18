@@ -31,7 +31,7 @@ O parâmetro `--reload` garante que alterações no código sejam refletidas aut
 
 Todas as rotas sob `/api` exigem o cabeçalho `Authorization` com o esquema `Bearer`. Defina um valor para `API_ADMIN_TOKEN` no arquivo `.env` para obter um token com acesso completo. Ao usar o token de administrador é obrigatório informar o cabeçalho `X-Database-Name` indicando a base que deverá receber a operação.
 
-Quando `ENABLE_TOKEN_CREATION_ROUTE=true`, a rota `POST /api/tokens` fica disponível (ela não aparece na documentação pública) e permite emitir novos tokens persistidos na coleção definida por `API_TOKENS_COLLECTION`, localizada na base `API_TOKENS_DATABASE` (valor padrão: `api_tokens_registry`). Ao criar um token para uma base inexistente, o serviço cria automaticamente o banco e a coleção time-series configurada, garantindo que as próximas requisições já encontrem a estrutura necessária.
+Quando `ENABLE_TOKEN_CREATION_ROUTE=true`, a rota `POST /api/tokens` fica disponível (ela não aparece na documentação pública) e permite emitir novos tokens persistidos na coleção definida por `API_TOKENS_COLLECTION`, criada dentro da própria base indicada na requisição. Ao criar um token para uma base inexistente, o serviço cria automaticamente o banco, a coleção time-series configurada e a coleção de tokens, garantindo que as próximas requisições já encontrem a estrutura necessária.
 
 Exemplo de criação de token:
 
