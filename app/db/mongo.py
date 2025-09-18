@@ -164,34 +164,50 @@ class MongoDBManager:
         current_ttl = (
             existing_index.get("expireAfterSeconds") if existing_index is not None else None
         )
+        current_partial_filter = (
+            existing_index.get("partialFilterExpression") if existing_index is not None else None
+        )
+
+        meta_field = settings.timeseries_meta_field
+        partial_filter_expression = None
+
+        if desired_ttl is not None:
+            if not meta_field:
+                logger.error(
+                    "Time-series TTL index requires a meta field. Set TIMESERIES_META_FIELD or disable TTL."
+                )
+                raise MongoConnectionError(
+                    "Time-series TTL index requires a meta field. Set TIMESERIES_META_FIELD or disable TTL."
+                )
+
+            partial_filter_expression = {meta_field: {"$exists": True}}
+
+        index_specification: List[Tuple[str, int]] = [(time_field, ASCENDING)]
+        index_kwargs = {"name": index_name}
+        if desired_ttl is not None:
+            index_kwargs["expireAfterSeconds"] = desired_ttl
+        if partial_filter_expression is not None:
+            index_kwargs["partialFilterExpression"] = partial_filter_expression
 
         try:
+            if existing_index is None:
+                await collection.create_index(index_specification, **index_kwargs)
+                return
+
+            needs_recreation = False
+
             if desired_ttl is None:
-                if existing_index is None:
-                    await collection.create_index(
-                        [(time_field, ASCENDING)],
-                        name=index_name,
-                    )
-                elif current_ttl is not None:
-                    await collection.drop_index(index_name)
-                    await collection.create_index(
-                        [(time_field, ASCENDING)],
-                        name=index_name,
-                    )
+                if current_ttl is not None or current_partial_filter is not None:
+                    needs_recreation = True
             else:
-                if existing_index is None:
-                    await collection.create_index(
-                        [(time_field, ASCENDING)],
-                        expireAfterSeconds=desired_ttl,
-                        name=index_name,
-                    )
-                elif current_ttl != desired_ttl:
-                    await collection.drop_index(index_name)
-                    await collection.create_index(
-                        [(time_field, ASCENDING)],
-                        expireAfterSeconds=desired_ttl,
-                        name=index_name,
-                    )
+                if current_ttl != desired_ttl:
+                    needs_recreation = True
+                if current_partial_filter != partial_filter_expression:
+                    needs_recreation = True
+
+            if needs_recreation:
+                await collection.drop_index(index_name)
+                await collection.create_index(index_specification, **index_kwargs)
         except PyMongoError as error:
             logger.exception("Failed to ensure indexes: %s", error)
             raise MongoConnectionError("Failed to ensure MongoDB indexes.") from error
