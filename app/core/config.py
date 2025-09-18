@@ -64,9 +64,9 @@ class Settings(BaseSettings):
     allowed_origins: List[str] = Field(default_factory=list, alias="ALLOWED_ORIGINS")
 
     api_admin_token: str = Field(default=..., alias="API_ADMIN_TOKEN")
-    enable_token_creation_route: bool = Field(
+    show_token_creation_route: bool = Field(
         default=False,
-        alias="ENABLE_TOKEN_CREATION_ROUTE",
+        alias="SHOW_TOKEN_CREATION_ROUTE",
     )
     api_tokens_collection: str = Field(default="api_tokens", alias="API_TOKENS_COLLECTION")
 

@@ -14,5 +14,5 @@ if str(PROJECT_ROOT) not in sys.path:
 
 os.environ.setdefault("MONGODB_URI", "mongodb://localhost:27017")
 os.environ.setdefault("API_ADMIN_TOKEN", "test-admin-token")
-os.environ.setdefault("ENABLE_TOKEN_CREATION_ROUTE", "true")
+os.environ.setdefault("SHOW_TOKEN_CREATION_ROUTE", "true")
 os.environ.setdefault("API_TOKENS_COLLECTION", "test_api_tokens")

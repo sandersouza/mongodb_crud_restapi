@@ -274,7 +274,7 @@
 								"tokens"
 							]
 						},
-						"description": "Emite um novo token associado à base informada. Requer habilitar ENABLE_TOKEN_CREATION_ROUTE=true."
+                                                "description": "Emite um novo token associado à base informada. Para visualizar a rota na documentação pública, defina SHOW_TOKEN_CREATION_ROUTE=true."
 					},
 					"response": [
 						{
@@ -320,7 +320,7 @@
 										"tokens"
 									]
 								},
-								"description": "Emite um novo token associado à base informada. Requer habilitar ENABLE_TOKEN_CREATION_ROUTE=true."
+                                                                "description": "Emite um novo token associado à base informada. Para visualizar a rota na documentação pública, defina SHOW_TOKEN_CREATION_ROUTE=true."
 							},
 							"status": "Created",
 							"code": 201,
