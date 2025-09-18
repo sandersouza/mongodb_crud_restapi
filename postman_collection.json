@@ -1,347 +1,396 @@
 {
-  "info": {
-    "name": "MongoDB CRUD API",
-    "_postman_id": "3dc7eb6c-bc9b-4c4c-8ec4-5b6d564e9636",
-    "description": "Coleção Postman com exemplos de uso das rotas da MongoDB CRUD REST API.",
-    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-  },
-  "variable": [
-    {
-      "key": "baseUrl",
-      "value": "http://localhost:8000",
-      "type": "string",
-      "description": "URL base da API. Ajuste conforme o ambiente."
-    },
-    {
-      "key": "recordId",
-      "value": "64b000000000000000000000",
-      "type": "string",
-      "description": "ObjectId usado nos exemplos de rotas que requerem um ID válido. Substitua após criar um registro."
-    },
-    {
-      "key": "apiToken",
-      "value": "",
-      "type": "string",
-      "description": "Token Bearer utilizado nas rotas de registros. Preencha com o valor recebido ao criar um token."
-    },
-    {
-      "key": "adminToken",
-      "value": "",
-      "type": "string",
-      "description": "Token administrador definido em API_ADMIN_TOKEN para gerenciar credenciais."
-    },
-    {
-      "key": "adminDatabase",
-      "value": "",
-      "type": "string",
-      "description": "Nome da base que deve ser informada no cabeçalho X-Database-Name ao usar o token administrador."
-    }
-  ],
-  "item": [
-    {
-      "name": "Health",
-      "item": [
-        {
-          "name": "Health Check",
-          "request": {
-            "method": "GET",
-            "header": [],
-            "url": {
-              "raw": "{{baseUrl}}/healthz",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "healthz"
-              ]
-            },
-            "description": "Verifica se o serviço está pronto para receber requisições."
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Records",
-      "item": [
-        {
-          "name": "Create Record",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{apiToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"acronym\": \"swe\",\n  \"component\": \"automated-prr\",\n  \"payload\": {\n    \"healthcheck\": true,\n    \"circuitbreak\": true,\n    \"bulkhead\": false,\n    \"ratelimit\": false\n  },\n  \"metadata\": {\n    \"technology\": \"python\"\n  }\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/records",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "records"
-              ]
-            },
-            "description": "Cria um novo registro de série temporal. O campo \"acronym\" é aceito como alias de \"source\"."
-          },
-          "response": []
-        },
-        {
-          "name": "List Records",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{apiToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/records?limit=10&skip=0",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "records"
-              ],
-              "query": [
-                {
-                  "key": "limit",
-                  "value": "10",
-                  "description": "Quantidade máxima de registros retornados (1-1000)."
-                },
-                {
-                  "key": "skip",
-                  "value": "0",
-                  "description": "Quantidade de registros ignorados para paginação."
-                }
-              ]
-            },
-            "description": "Lista registros ordenados do mais recente para o mais antigo com suporte a paginação."
-          },
-          "response": []
-        },
-        {
-          "name": "Get Record by ID",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{apiToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/records/{{recordId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "records",
-                "{{recordId}}"
-              ]
-            },
-            "description": "Recupera um registro específico utilizando seu ObjectId. Atualize a variável {{recordId}} com um ID válido."
-          },
-          "response": []
-        },
-        {
-          "name": "Update Record",
-          "request": {
-            "method": "PUT",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{apiToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"payload\": {\n    \"healthcheck\": true,\n    \"circuitbreak\": true,\n    \"bulkhead\": true,\n    \"ratelimit\": true\n  },\n  \"metadata\": {\n    \"technology\": \"python\",\n    \"owner\": \"observability-team\"\n  }\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/records/{{recordId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "records",
-                "{{recordId}}"
-              ]
-            },
-            "description": "Atualiza campos de um registro existente. A requisição aceita atualizações parciais."
-          },
-          "response": []
-        },
-        {
-          "name": "Delete Record",
-          "request": {
-            "method": "DELETE",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{apiToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/records/{{recordId}}",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "records",
-                "{{recordId}}"
-              ]
-            },
-            "description": "Remove um registro do banco de dados."
-          },
-          "response": []
-        },
-        {
-          "name": "Search Records",
-          "request": {
-            "method": "GET",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{apiToken}}"
-              }
-            ],
-            "url": {
-              "raw": "{{baseUrl}}/api/records/search?field=source&value=swe&latest=true",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "records",
-                "search"
-              ],
-              "query": [
-                {
-                  "key": "field",
-                  "value": "source",
-                  "description": "Campo utilizado no filtro (suporta dot-notation, ex.: payload.healthcheck)."
-                },
-                {
-                  "key": "value",
-                  "value": "swe",
-                  "description": "Valor a ser comparado para o campo informado."
-                },
-                {
-                  "key": "latest",
-                  "value": "true",
-                  "description": "Quando true, retorna apenas o registro mais recente que satisfaz os filtros."
-                },
-                {
-                  "key": "limit",
-                  "value": "25",
-                  "description": "Quantidade máxima de registros quando latest=false."
-                },
-                {
-                  "key": "start_time",
-                  "value": "2024-01-01T00:00:00Z",
-                  "description": "(Opcional) Limite inicial da janela temporal no formato ISO 8601."
-                },
-                {
-                  "key": "end_time",
-                  "value": "2024-12-31T23:59:59Z",
-                  "description": "(Opcional) Limite final da janela temporal no formato ISO 8601."
-                }
-              ]
-            },
-            "description": "Pesquisa registros por campo arbitrário com suporte a janela temporal. Ajuste os parâmetros conforme a necessidade."
-          },
-          "response": []
-        }
-      ]
-    },
-    {
-      "name": "Tokens",
-      "item": [
-        {
-          "name": "Create Token",
-          "request": {
-            "method": "POST",
-            "header": [
-              {
-                "key": "Authorization",
-                "value": "Bearer {{adminToken}}"
-              },
-              {
-                "key": "Content-Type",
-                "value": "application/json"
-              },
-              {
-                "key": "X-Database-Name",
-                "value": "{{adminDatabase}}"
-              }
-            ],
-            "body": {
-              "mode": "raw",
-              "raw": "{\n  \"database\": \"validationsplugin\",\n  \"description\": \"Token de teste\"\n}",
-              "options": {
-                "raw": {
-                  "language": "json"
-                }
-              }
-            },
-            "url": {
-              "raw": "{{baseUrl}}/api/tokens",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "api",
-                "tokens"
-              ]
-            },
-            "description": "Emite um novo token associado à base informada. Requer habilitar ENABLE_TOKEN_CREATION_ROUTE=true.\n\nAo usar o token administrador, inclua o cabeçalho X-Database-Name apontando para a base de destino."
-          },
-          "response": [
-            {
-              "name": "Token criado",
-              "status": "Created",
-              "code": 201,
-              "header": [
-                {
-                  "key": "Content-Type",
-                  "value": "application/json"
-                }
-              ],
-              "body": "{\n  \"token\": \"<novo-token>\",\n  \"database\": \"validationsplugin\",\n  \"description\": \"Token de teste\",\n  \"created_at\": \"2024-01-01T00:00:00Z\",\n  \"last_used_at\": null\n}"
-            }
-          ]
-        }
-      ]
-    }
-  ]
+	"info": {
+		"_postman_id": "a736d296-874f-458d-8ee6-e299bf108883",
+		"name": "MongoDB CRUD API",
+		"description": "Coleção Postman com exemplos de uso das rotas da MongoDB CRUD REST API.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "7587829"
+	},
+	"item": [
+		{
+			"name": "Health",
+			"item": [
+				{
+					"name": "Health Check",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/healthz",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"healthz"
+							]
+						},
+						"description": "Verifica se o serviço está pronto para receber requisições."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Records",
+			"item": [
+				{
+					"name": "Create Record",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"acronym\": \"swe\",\n  \"component\": \"automated-prr\",\n  \"payload\": {\n    \"healthcheck\": true,\n    \"circuitbreak\": true,\n    \"bulkhead\": false,\n    \"ratelimit\": false\n  },\n  \"metadata\": {\n    \"technology\": \"python\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/records",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"records"
+							]
+						},
+						"description": "Cria um novo registro de série temporal. O campo \"acronym\" é aceito como alias de \"source\"."
+					},
+					"response": []
+				},
+				{
+					"name": "List Records",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/records?limit=10&skip=0",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"records"
+							],
+							"query": [
+								{
+									"key": "limit",
+									"value": "10",
+									"description": "Quantidade máxima de registros retornados (1-1000)."
+								},
+								{
+									"key": "skip",
+									"value": "0",
+									"description": "Quantidade de registros ignorados para paginação."
+								}
+							]
+						},
+						"description": "Lista registros ordenados do mais recente para o mais antigo com suporte a paginação."
+					},
+					"response": []
+				},
+				{
+					"name": "Get Record by ID",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/records/{{recordId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"records",
+								"{{recordId}}"
+							]
+						},
+						"description": "Recupera um registro específico utilizando seu ObjectId. Atualize a variável {{recordId}} com um ID válido."
+					},
+					"response": []
+				},
+				{
+					"name": "Update Record",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"payload\": {\n    \"healthcheck\": true,\n    \"circuitbreak\": true,\n    \"bulkhead\": true,\n    \"ratelimit\": true\n  },\n  \"metadata\": {\n    \"technology\": \"python\",\n    \"owner\": \"observability-team\"\n  }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/records/{{recordId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"records",
+								"{{recordId}}"
+							]
+						},
+						"description": "Atualiza campos de um registro existente. A requisição aceita atualizações parciais."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Record",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/records/{{recordId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"records",
+								"{{recordId}}"
+							]
+						},
+						"description": "Remove um registro do banco de dados."
+					},
+					"response": []
+				},
+				{
+					"name": "Search Records",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/records/search?field=acronym&value=swe&latest=true&limit=25&start_time=2025-01-01T00:00:00Z&end_time=2026-12-31T23:59:59Z",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"records",
+								"search"
+							],
+							"query": [
+								{
+									"key": "field",
+									"value": "acronym",
+									"description": "Campo utilizado no filtro (suporta dot-notation, ex.: payload.healthcheck)."
+								},
+								{
+									"key": "value",
+									"value": "swe",
+									"description": "Valor a ser comparado para o campo informado."
+								},
+								{
+									"key": "latest",
+									"value": "true",
+									"description": "Quando true, retorna apenas o registro mais recente que satisfaz os filtros."
+								},
+								{
+									"key": "limit",
+									"value": "25",
+									"description": "Quantidade máxima de registros quando latest=false."
+								},
+								{
+									"key": "start_time",
+									"value": "2025-01-01T00:00:00Z",
+									"description": "(Opcional) Limite inicial da janela temporal no formato ISO 8601."
+								},
+								{
+									"key": "end_time",
+									"value": "2026-12-31T23:59:59Z",
+									"description": "(Opcional) Limite final da janela temporal no formato ISO 8601."
+								}
+							]
+						},
+						"description": "Pesquisa registros por campo arbitrário com suporte a janela temporal. Ajuste os parâmetros conforme a necessidade."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Tokens",
+			"item": [
+				{
+					"name": "Create Token",
+					"request": {
+						"auth": {
+							"type": "bearer",
+							"bearer": [
+								{
+									"key": "token",
+									"value": "{{adminToken}}",
+									"type": "string"
+								}
+							]
+						},
+						"method": "POST",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{adminToken}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"database\": \"validationsplugin\",\n  \"description\": \"commandline_tool\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tokens",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tokens"
+							]
+						},
+						"description": "Emite um novo token associado à base informada. Requer habilitar ENABLE_TOKEN_CREATION_ROUTE=true."
+					},
+					"response": [
+						{
+							"name": "Token criado",
+							"originalRequest": {
+								"auth": {
+									"type": "bearer",
+									"bearer": [
+										{
+											"key": "token",
+											"value": "{{adminToken}}",
+											"type": "string"
+										}
+									]
+								},
+								"method": "POST",
+								"header": [
+									{
+										"key": "Authorization",
+										"value": "Bearer {{adminToken}}"
+									},
+									{
+										"key": "Content-Type",
+										"value": "application/json"
+									}
+								],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n  \"database\": \"validationsplugin\",\n  \"description\": \"commandline_tool\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "{{baseUrl}}/api/tokens",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"api",
+										"tokens"
+									]
+								},
+								"description": "Emite um novo token associado à base informada. Requer habilitar ENABLE_TOKEN_CREATION_ROUTE=true."
+							},
+							"status": "Created",
+							"code": 201,
+							"_postman_previewlanguage": "Text",
+							"header": [
+								{
+									"key": "Content-Type",
+									"value": "application/json"
+								}
+							],
+							"cookie": [],
+							"body": "{\n  \"token\": \"<novo-token>\",\n  \"database\": \"validationsplugin\",\n  \"description\": \"Token de teste\",\n  \"created_at\": \"2024-01-01T00:00:00Z\",\n  \"last_used_at\": null\n}"
+						}
+					]
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "bearer",
+		"bearer": [
+			{
+				"key": "token",
+				"value": "{{apiToken}}",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8000",
+			"description": "URL base da API. Ajuste conforme o ambiente."
+		},
+		{
+			"key": "recordId",
+			"value": "64b000000000000000000000",
+			"description": "ObjectId usado nos exemplos de rotas que requerem um ID válido. Substitua após criar um registro."
+		},
+		{
+			"key": "apiToken",
+			"value": "",
+			"description": "Token Bearer utilizado nas rotas de registros. Preencha com o valor recebido ao criar um token."
+		},
+		{
+			"key": "adminToken",
+			"value": "",
+			"description": "Token administrador definido em API_ADMIN_TOKEN para gerenciar credenciais."
+		}
+	]
 }
