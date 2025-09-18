@@ -207,7 +207,7 @@ class MongoDBManager:
         """Ensure the collection's automatic expiration matches configuration."""
 
         try:
-            cursor = database.list_collections(filter={"name": collection_name})
+            cursor = await database.list_collections(filter={"name": collection_name})
             collection_info = await cursor.to_list(length=1)
         except PyMongoError as error:
             logger.exception("Failed to inspect collection TTL configuration: %s", error)

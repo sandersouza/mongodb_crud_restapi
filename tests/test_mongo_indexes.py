@@ -110,7 +110,7 @@ async def test_synchronize_collection_ttl_updates_value() -> None:
     database = Mock()
     cursor = Mock()
     cursor.to_list = AsyncMock(return_value=[{"options": {"expireAfterSeconds": 120}}])
-    database.list_collections = Mock(return_value=cursor)
+    database.list_collections = AsyncMock(return_value=cursor)
     database.command = AsyncMock()
 
     await manager._synchronize_collection_ttl(database, "measurements", desired_ttl=3600)
@@ -128,7 +128,7 @@ async def test_synchronize_collection_ttl_disables_when_unset() -> None:
     database = Mock()
     cursor = Mock()
     cursor.to_list = AsyncMock(return_value=[{"options": {"expireAfterSeconds": 60}}])
-    database.list_collections = Mock(return_value=cursor)
+    database.list_collections = AsyncMock(return_value=cursor)
     database.command = AsyncMock()
 
     await manager._synchronize_collection_ttl(database, "measurements", desired_ttl=None)
@@ -146,7 +146,7 @@ async def test_synchronize_collection_ttl_is_noop_when_matching() -> None:
     database = Mock()
     cursor = Mock()
     cursor.to_list = AsyncMock(return_value=[{"options": {"expireAfterSeconds": 3600}}])
-    database.list_collections = Mock(return_value=cursor)
+    database.list_collections = AsyncMock(return_value=cursor)
     database.command = AsyncMock()
 
     await manager._synchronize_collection_ttl(database, "measurements", desired_ttl=3600)
