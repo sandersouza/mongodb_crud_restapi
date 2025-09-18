@@ -152,12 +152,12 @@ async def create_record(
     PyMongoError = _PyMongoError
 
     document = payload.model_dump(by_alias=True)
-    expires_in_seconds = document.pop("expires_in_seconds", None)
+    ttl = document.pop("ttl", None)
     document.setdefault("timestamp", datetime.now(tz=timezone.utc))
     document["timestamp"] = _normalize_timestamp(document["timestamp"])
 
-    if expires_in_seconds and expires_in_seconds > 0:
-        document["expires_at"] = document["timestamp"] + timedelta(seconds=expires_in_seconds)
+    if ttl and ttl > 0:
+        document["expires_at"] = document["timestamp"] + timedelta(seconds=ttl)
 
     try:
         result = await collection.insert_one(document)

@@ -42,16 +42,16 @@ def test_time_series_create_ttl_validation() -> None:
         source="sensor",
         payload={},
         metadata={},
-        expires_in_seconds=0,
+        ttl=0,
     )
-    assert payload.expires_in_seconds == 0
+    assert payload.ttl == 0
 
     with pytest.raises(ValueError, match="greater than or equal to 0"):
         TimeSeriesRecordCreate(
             source="sensor",
             payload={},
             metadata={},
-            expires_in_seconds=-1,
+            ttl=-1,
         )
 
 
@@ -94,4 +94,4 @@ def test_api_token_create_validators() -> None:
         APITokenCreate(database="db", token="")
 
     with pytest.raises(ValueError, match="greater than or equal to 0"):
-        APITokenCreate(database="db", expires_in_seconds=-5)
+        APITokenCreate(database="db", ttl=-5)

@@ -48,7 +48,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"acronym\": \"swe\",\n  \"component\": \"automated-prr\",\n  \"payload\": {\n    \"healthcheck\": true,\n    \"circuitbreak\": true,\n    \"bulkhead\": false,\n    \"ratelimit\": false\n  },\n  \"metadata\": {\n    \"technology\": \"python\"\n  },\n  \"expires_in_seconds\": 60\n}",
+							"raw": "{\n  \"acronym\": \"swe\",\n  \"component\": \"automated-prr\",\n  \"payload\": {\n    \"healthcheck\": true,\n    \"circuitbreak\": true,\n    \"bulkhead\": false,\n    \"ratelimit\": false\n  },\n  \"metadata\": {\n    \"technology\": \"python\"\n  },\n  \"ttl\": 60\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -257,7 +257,7 @@
 						],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n  \"database\": \"automated-prr\",\n  \"description\": \"commandline_tool\",\n  \"expires_in_seconds\": 60\n}",
+							"raw": "{\n  \"database\": \"automated-prr\",\n  \"description\": \"commandline_tool\",\n  \"ttl\": 60\n}",
 							"options": {
 								"raw": {
 									"language": "json"

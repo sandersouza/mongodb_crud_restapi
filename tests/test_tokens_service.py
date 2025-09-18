@@ -124,7 +124,7 @@ async def test_create_token_persists_document(fake_pymongo: FakePyMongo, monkeyp
         database="metrics",
         token_value="secret",
         description="Sensor access",
-        expires_in_seconds=3600,
+        ttl=3600,
     )
 
     assert isinstance(created, CreatedToken)

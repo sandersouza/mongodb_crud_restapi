@@ -44,7 +44,7 @@ async def test_create_record_applies_expiration() -> None:
         payload={"foo": "bar"},
         metadata={},
         timestamp=now,
-        expires_in_seconds=600,
+        ttl=600,
     )
 
     document = await records.create_record(collection, payload)

@@ -46,7 +46,7 @@ def test_create_token_returns_secret(monkeypatch: pytest.MonkeyPatch, admin_clie
     expires_at = created_at + timedelta(hours=1)
 
     async def fake_create_token(**kwargs):  # pragma: no cover - trivial coroutine
-        assert kwargs["expires_in_seconds"] == 3600
+        assert kwargs["ttl"] == 3600
         return CreatedToken(
             token="generated-token",
             database=kwargs["database"],
@@ -63,7 +63,7 @@ def test_create_token_returns_secret(monkeypatch: pytest.MonkeyPatch, admin_clie
         json={
             "database": "validationsplugin",
             "description": "Token de teste",
-            "expires_in_seconds": 3600,
+            "ttl": 3600,
         },
     )
 

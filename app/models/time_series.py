@@ -40,7 +40,7 @@ class TimeSeriesRecordBase(BaseModel):
 class TimeSeriesRecordCreate(TimeSeriesRecordBase):
     """Payload required to create a new time-series record."""
 
-    expires_in_seconds: Optional[int] = Field(
+    ttl: Optional[int] = Field(
         default=None,
         description=(
             "Optional TTL for the record expressed in seconds. "
@@ -48,13 +48,13 @@ class TimeSeriesRecordCreate(TimeSeriesRecordBase):
         ),
     )
 
-    @field_validator("expires_in_seconds")
+    @field_validator("ttl")
     @classmethod
     def validate_ttl(cls, value: Optional[int]) -> Optional[int]:
         if value is None:
             return None
         if value < 0:
-            raise ValueError("expires_in_seconds must be greater than or equal to 0.")
+            raise ValueError("ttl must be greater than or equal to 0.")
         return value
 
 

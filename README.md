@@ -32,7 +32,7 @@ Todas as rotas sob `/api` exigem o cabeçalho `Authorization` no formato `Bearer
 Com o token do administrador, o serviço consegue criar automaticamente a base solicitada, a coleção time-series configurada e a coleção definida em `API_TOKENS_COLLECTION`. Dessa forma, é possível fornecer credenciais para times ou sistemas mesmo quando a estrutura ainda não existe.
 
 ### Tokens de aplicação
-Cada token de aplicação é armazenado com hash SHA-256, registra o campo `last_used_at` a cada requisição e pode receber um tempo de expiração (`expires_in_seconds`). Quando informado, esse tempo gera um `expires_at`. O serviço mantém um índice TTL e também executa uma limpeza oportunista sempre que a coleção é acessada, garantindo a remoção dos tokens expirados mesmo em ambientes onde o monitor TTL do MongoDB não está ativo. Ajuste a cadência dessa limpeza com `EXPIRATION_CLEANUP_INTERVAL_SECONDS`. Guarde o valor retornado no ato da criação — ele não é exibido novamente.
+Cada token de aplicação é armazenado com hash SHA-256, registra o campo `last_used_at` a cada requisição e pode receber um tempo de expiração (`ttl`). Quando informado, esse tempo gera um `expires_at`. O serviço mantém um índice TTL e também executa uma limpeza oportunista sempre que a coleção é acessada, garantindo a remoção dos tokens expirados mesmo em ambientes onde o monitor TTL do MongoDB não está ativo. Ajuste a cadência dessa limpeza com `EXPIRATION_CLEANUP_INTERVAL_SECONDS`. Guarde o valor retornado no ato da criação — ele não é exibido novamente.
 
 ## Guia de consumo via `curl`
 Os exemplos a seguir assumem a API disponível em `http://localhost:8000`. Ajuste URLs e cabeçalhos conforme o seu ambiente.
@@ -59,7 +59,7 @@ curl -X POST http://localhost:8000/api/tokens \
   -d '{
         "database": "validationsplugin",
         "description": "Token de pipeline",
-        "expires_in_seconds": 3600
+        "ttl": 3600
       }'
 ```
 
@@ -103,7 +103,7 @@ export ACCESS_TOKEN="<token-de-acesso>"
 
 Caso prefira usar o token administrador para essas rotas, acrescente `-H "X-Database-Name: <nome-da-base>"` em cada comando.
 
-Para habilitar a remoção automática de documentos antigos, informe `expires_in_seconds` ao criar o registro. O serviço grava um `expires_at` correspondente (com base no `timestamp` informado) e executa uma limpeza oportunista sempre que a coleção é acessada, removendo documentos expirados mesmo sem suporte a índices TTL por campo em coleções time-series. Quando o campo é omitido ou `0`, o registro permanece indefinidamente. Controle a frequência dessa limpeza com `EXPIRATION_CLEANUP_INTERVAL_SECONDS` (em segundos); use `0` para executar a varredura a cada acesso.
+Para habilitar a remoção automática de documentos antigos, informe `ttl` ao criar o registro. O serviço grava um `expires_at` correspondente (com base no `timestamp` informado) e executa uma limpeza oportunista sempre que a coleção é acessada, removendo documentos expirados mesmo sem suporte a índices TTL por campo em coleções time-series. Quando o campo é omitido ou `0`, o registro permanece indefinidamente. Controle a frequência dessa limpeza com `EXPIRATION_CLEANUP_INTERVAL_SECONDS` (em segundos); use `0` para executar a varredura a cada acesso.
 
 #### Criar registro (`POST /api/records`)
 Persiste um novo registro de série temporal. O campo `acronym` é um alias para `source`; utilize o que for mais conveniente. O serviço garante que a coleção time-series exista e cria índices necessários.
@@ -122,7 +122,7 @@ curl -X POST http://localhost:8000/api/records \
           "ratelimit": false
         },
         "metadata": {"technology": "python"},
-        "expires_in_seconds": 3600
+        "ttl": 3600
       }'
 ```
 

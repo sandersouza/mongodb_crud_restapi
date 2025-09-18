@@ -35,7 +35,7 @@ async def create_api_token(
             database=payload.database,
             token_value=payload.token,
             description=payload.description,
-            expires_in_seconds=payload.expires_in_seconds,
+            ttl=payload.ttl,
         )
     except token_service.TokenConflictError as error:
         raise HTTPException(

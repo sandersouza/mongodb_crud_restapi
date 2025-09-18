@@ -148,7 +148,7 @@ async def create_token(
     database: str,
     token_value: Optional[str] = None,
     description: Optional[str] = None,
-    expires_in_seconds: Optional[int] = None,
+    ttl: Optional[int] = None,
     token_length: int = 32,
 ) -> CreatedToken:
     """Create a new token associated with ``database``.
@@ -171,8 +171,8 @@ async def create_token(
     token_hash = _hash_token(token_secret)
     now = datetime.now(timezone.utc)
     expires_at = (
-        now + timedelta(seconds=expires_in_seconds)
-        if expires_in_seconds and expires_in_seconds > 0
+        now + timedelta(seconds=ttl)
+        if ttl and ttl > 0
         else None
     )
 
