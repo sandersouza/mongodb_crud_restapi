@@ -6,8 +6,11 @@ import hashlib
 import logging
 import secrets
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import datetime, timedelta, timezone
+from typing import List, Optional
+
+from bson import ObjectId
+from bson.errors import InvalidId
 
 from ..db.mongo import MongoConnectionError, mongo_manager
 
@@ -52,6 +55,7 @@ class TokenMetadata:
     description: Optional[str]
     created_at: datetime
     last_used_at: Optional[datetime]
+    expires_at: Optional[datetime]
 
 
 @dataclass
@@ -59,6 +63,13 @@ class CreatedToken(TokenMetadata):
     """Details about a newly created token including its secret value."""
 
     token: str
+
+
+@dataclass
+class StoredToken(TokenMetadata):
+    """Token metadata augmented with the database document identifier."""
+
+    id: str
 
 
 def _hash_token(token: str) -> str:
@@ -88,6 +99,7 @@ async def fetch_token_metadata(token: str) -> TokenMetadata:
         description=document.get("description"),
         created_at=document["created_at"],
         last_used_at=document.get("last_used_at"),
+        expires_at=document.get("expires_at"),
     )
 
     _, PyMongoError = _require_pymongo_errors()
@@ -109,6 +121,7 @@ async def create_token(
     database: str,
     token_value: Optional[str] = None,
     description: Optional[str] = None,
+    expires_in_seconds: Optional[int] = None,
     token_length: int = 32,
 ) -> CreatedToken:
     """Create a new token associated with ``database``.
@@ -130,6 +143,11 @@ async def create_token(
     token_secret = token_value or secrets.token_hex(token_length // 2)
     token_hash = _hash_token(token_secret)
     now = datetime.now(timezone.utc)
+    expires_at = (
+        now + timedelta(seconds=expires_in_seconds)
+        if expires_in_seconds and expires_in_seconds > 0
+        else None
+    )
 
     document = {
         "token_hash": token_hash,
@@ -138,6 +156,9 @@ async def create_token(
         "created_at": now,
         "last_used_at": None,
     }
+
+    if expires_at is not None:
+        document["expires_at"] = expires_at
 
     DuplicateKeyError, PyMongoError = _require_pymongo_errors()
     try:
@@ -156,4 +177,65 @@ async def create_token(
         description=description,
         created_at=now,
         last_used_at=None,
+        expires_at=expires_at,
     )
+
+
+async def list_tokens(database: Optional[str] = None) -> List[StoredToken]:
+    """Return metadata for every stored token, optionally scoped to a database."""
+
+    try:
+        collections = await mongo_manager.iter_token_collections(database)
+    except MongoConnectionError as error:  # pragma: no cover - defensive guard
+        raise TokenPersistenceError("Token storage is not available.") from error
+
+    _, PyMongoError = _require_pymongo_errors()
+
+    tokens: List[StoredToken] = []
+    for database_name, collection in collections:
+        try:
+            async for document in collection.find():
+                tokens.append(
+                    StoredToken(
+                        id=str(document["_id"]),
+                        database=database_name,
+                        description=document.get("description"),
+                        created_at=document["created_at"],
+                        last_used_at=document.get("last_used_at"),
+                        expires_at=document.get("expires_at"),
+                    )
+                )
+        except PyMongoError as error:
+            logger.exception("Failed to list API tokens: %s", error)
+            raise TokenPersistenceError("Unable to query stored API tokens.") from error
+
+    return tokens
+
+
+async def revoke_token(*, database: str, token_id: str) -> None:
+    """Delete the token with ``token_id`` persisted inside ``database``."""
+
+    try:
+        object_id = ObjectId(token_id)
+    except InvalidId as error:
+        raise TokenNotFoundError("Token not found for the requested database.") from error
+
+    try:
+        collection = await mongo_manager.get_token_collection_for_database(database)
+    except MongoConnectionError as error:  # pragma: no cover - defensive guard
+        raise TokenPersistenceError("Token storage is not available.") from error
+
+    _, PyMongoError = _require_pymongo_errors()
+
+    try:
+        document = await collection.find_one_and_delete({"_id": object_id})
+    except PyMongoError as error:
+        logger.exception("Failed to revoke API token: %s", error)
+        raise TokenPersistenceError("Unable to revoke the requested API token.") from error
+
+    if document is None:
+        raise TokenNotFoundError("Token not found for the requested database.")
+
+    token_hash = document.get("token_hash")
+    if token_hash:
+        mongo_manager.forget_token_location(token_hash)

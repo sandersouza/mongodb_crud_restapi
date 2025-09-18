@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Dict, Optional, Tuple, TYPE_CHECKING
+from typing import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 try:  # pragma: no cover - optional dependency
     from pymongo import ASCENDING
@@ -179,6 +179,11 @@ class MongoDBManager:
         collection = database[collection_name]
         try:
             await collection.create_index("token_hash", unique=True)
+            await collection.create_index(
+                "expires_at",
+                expireAfterSeconds=0,
+                name="expires_at_ttl",
+            )
         except PyMongoError as error:
             logger.exception("Failed to ensure API token indexes: %s", error)
             raise MongoConnectionError("Failed to ensure MongoDB token indexes.") from error
@@ -209,6 +214,64 @@ class MongoDBManager:
         """Cache the database where ``token_hash`` is persisted."""
 
         self._token_hash_cache[token_hash] = database_name
+
+    def forget_token_location(self, token_hash: str) -> None:
+        """Remove any cached reference for ``token_hash``."""
+
+        self._token_hash_cache.pop(token_hash, None)
+
+    async def iter_token_collections(
+        self, database_name: Optional[str] = None
+    ) -> List[Tuple[str, "AsyncIOMotorCollection"]]:
+        """Yield token collections that already exist in MongoDB."""
+
+        if self._client is None:
+            raise MongoConnectionError("MongoDB client has not been initialized.")
+
+        settings = get_settings()
+
+        collections: List[Tuple[str, "AsyncIOMotorCollection"]] = []
+        seen: Set[str] = set()
+
+        if database_name is None:
+            target_databases = await self._client.list_database_names()
+            system_databases = {"admin", "config", "local"}
+            target_databases = [
+                name for name in target_databases if name not in system_databases
+            ]
+        else:
+            target_databases = [database_name]
+
+        for cached_name, collection in list(self._token_collection_cache.items()):
+            if database_name is None or cached_name == database_name:
+                collections.append((cached_name, collection))
+                seen.add(cached_name)
+
+        for name in target_databases:
+            if name in seen:
+                continue
+
+            database = self._database_cache.get(name)
+            if database is None:
+                database = self.client[name]
+                self._database_cache[name] = database
+
+            try:
+                existing_collections = await database.list_collection_names()
+            except PyMongoError as error:
+                logger.exception(
+                    "Failed to inspect database %s for API tokens: %s", name, error
+                )
+                raise MongoConnectionError("Failed to query MongoDB for API tokens.") from error
+
+            if settings.api_tokens_collection not in existing_collections:
+                continue
+
+            collection = await self._ensure_token_collection(database)
+            collections.append((name, collection))
+            seen.add(name)
+
+        return collections
 
     async def find_token_document(
         self, token_hash: str

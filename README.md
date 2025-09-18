@@ -31,7 +31,9 @@ O parâmetro `--reload` garante que alterações no código sejam refletidas aut
 
 Todas as rotas sob `/api` exigem o cabeçalho `Authorization` com o esquema `Bearer`. Defina um valor para `API_ADMIN_TOKEN` no arquivo `.env` para obter um token com acesso completo. Ao usar o token de administrador é obrigatório informar o cabeçalho `X-Database-Name` indicando a base que deverá receber a operação.
 
-Quando `ENABLE_TOKEN_CREATION_ROUTE=true`, a rota `POST /api/tokens` fica disponível (ela não aparece na documentação pública) e permite emitir novos tokens persistidos na coleção definida por `API_TOKENS_COLLECTION`, criada dentro da própria base indicada na requisição. Ao criar um token para uma base inexistente, o serviço cria automaticamente o banco, a coleção time-series configurada e a coleção de tokens, garantindo que as próximas requisições já encontrem a estrutura necessária.
+Quando `ENABLE_TOKEN_CREATION_ROUTE=true`, rotas administrativas adicionais ficam disponíveis (elas não aparecem na documentação pública). A rota `POST /api/tokens` emite novos tokens persistidos na coleção definida por `API_TOKENS_COLLECTION`, criada dentro da própria base indicada na requisição. Ao criar um token para uma base inexistente, o serviço cria automaticamente o banco, a coleção time-series configurada e a coleção de tokens, garantindo que as próximas requisições já encontrem a estrutura necessária. Tokens podem ter validade opcional configurada por meio do campo `expires_in_seconds` (valor em segundos); se ausente ou igual a `0`, o token nunca expira. O serviço garante um índice TTL sobre `expires_at`, permitindo que tokens expirados sejam removidos automaticamente pelo MongoDB.
+
+A rota `GET /api/tokens` lista todos os tokens existentes juntamente com a base MongoDB correspondente e aceita um parâmetro opcional `database` para limitar a consulta a uma única base. Já `DELETE /api/tokens/{database}/{token_id}` revoga um token específico (utilize o `_id` retornado pelo endpoint de listagem). Todas essas rotas exigem o uso do token de administrador definido em `API_ADMIN_TOKEN`.
 
 Exemplo de criação de token:
 
@@ -41,7 +43,8 @@ curl -X POST http://localhost:8000/api/tokens \
   -H "Content-Type: application/json" \
   -d '{
         "database": "validationsplugin",
-        "description": "Token de pipeline"
+        "description": "Token de pipeline",
+        "expires_in_seconds": 3600
       }'
 ```
 
