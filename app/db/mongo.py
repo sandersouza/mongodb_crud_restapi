@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Optional
+from typing import Dict, Optional
 
 from motor.motor_asyncio import (
     AsyncIOMotorClient,
@@ -29,6 +29,9 @@ class MongoDBManager:
         self._client: Optional[AsyncIOMotorClient] = None
         self._database: Optional[AsyncIOMotorDatabase] = None
         self._collection: Optional[AsyncIOMotorCollection] = None
+        self._token_collection: Optional[AsyncIOMotorCollection] = None
+        self._database_cache: Dict[str, AsyncIOMotorDatabase] = {}
+        self._collection_cache: Dict[str, AsyncIOMotorCollection] = {}
 
     @property
     def client(self) -> AsyncIOMotorClient:
@@ -54,6 +57,14 @@ class MongoDBManager:
             raise MongoConnectionError("MongoDB collection has not been initialized.")
         return self._collection
 
+    @property
+    def token_collection(self) -> AsyncIOMotorCollection:
+        """Return the collection that stores API tokens."""
+
+        if self._token_collection is None:
+            raise MongoConnectionError("MongoDB token collection has not been initialized.")
+        return self._token_collection
+
     async def connect(self) -> None:
         """Create a new MongoDB connection if one does not already exist."""
 
@@ -75,27 +86,52 @@ class MongoDBManager:
             logger.exception("Could not connect to MongoDB: %s", error)
             raise MongoConnectionError("Unable to establish a connection to MongoDB.") from error
 
-        self._database = self._client[settings.mongodb_database]
-        await self._ensure_timeseries_collection()
+        self._database_cache.clear()
+        self._collection_cache.clear()
 
-    async def _ensure_timeseries_collection(self) -> None:
-        """Create the configured database and time-series collection if needed."""
+        default_database = await self._get_database(settings.mongodb_database)
+        self._database = default_database
+        self._collection = await self._ensure_timeseries_collection(
+            default_database, settings.mongodb_database
+        )
+        await self._ensure_token_collection(default_database)
+
+    async def _get_database(self, database_name: str) -> AsyncIOMotorDatabase:
+        """Return (and cache) a database instance, creating it if necessary."""
+
+        if self._client is None:
+            raise MongoConnectionError("MongoDB client has not been initialized.")
+
+        if database_name in self._database_cache:
+            return self._database_cache[database_name]
+
+        database = self._client[database_name]
+        existing_databases = await self._client.list_database_names()
+        if database_name not in existing_databases:
+            logger.info("Database %s not found. It will be created automatically.", database_name)
+
+        self._database_cache[database_name] = database
+        return database
+
+    async def _ensure_timeseries_collection(
+        self, database: AsyncIOMotorDatabase, database_name: str
+    ) -> AsyncIOMotorCollection:
+        """Create a time-series collection for the given database if needed."""
 
         settings = get_settings()
-        assert self._database is not None  # For type checkers
 
-        existing_databases = await self._client.list_database_names()  # type: ignore[union-attr]
-        if settings.mongodb_database not in existing_databases:
-            logger.info("Database %s not found. It will be created automatically.", settings.mongodb_database)
-
-        existing_collections = await self._database.list_collection_names()
+        existing_collections = await database.list_collection_names()
         if settings.mongodb_collection not in existing_collections:
-            logger.info("Creating time-series collection %s", settings.mongodb_collection)
+            logger.info(
+                "Creating time-series collection %s in database %s",
+                settings.mongodb_collection,
+                database_name,
+            )
             timeseries_options = {"timeField": settings.timeseries_time_field}
             if settings.timeseries_meta_field:
                 timeseries_options["metaField"] = settings.timeseries_meta_field
             try:
-                await self._database.create_collection(
+                await database.create_collection(
                     settings.mongodb_collection,
                     timeseries=timeseries_options,
                 )
@@ -105,19 +141,55 @@ class MongoDBManager:
                     settings.mongodb_collection,
                 )
 
-        self._collection = self._database[settings.mongodb_collection]
-        await self._ensure_indexes()
+        collection = database[settings.mongodb_collection]
+        await self._ensure_indexes(collection)
+        self._collection_cache[database_name] = collection
+        return collection
 
-    async def _ensure_indexes(self) -> None:
+    async def _ensure_indexes(self, collection: AsyncIOMotorCollection) -> None:
         """Ensure indexes exist for efficient time-based queries."""
 
         settings = get_settings()
-        assert self._collection is not None
         try:
-            await self._collection.create_index([(settings.timeseries_time_field, ASCENDING)])
+            await collection.create_index([(settings.timeseries_time_field, ASCENDING)])
         except PyMongoError as error:
             logger.exception("Failed to ensure indexes: %s", error)
             raise MongoConnectionError("Failed to ensure MongoDB indexes.") from error
+
+    async def _ensure_token_collection(self, database: AsyncIOMotorDatabase) -> None:
+        """Create the collection responsible for storing API tokens."""
+
+        settings = get_settings()
+        collection_name = settings.api_tokens_collection
+
+        existing_collections = await database.list_collection_names()
+        if collection_name not in existing_collections:
+            logger.info(
+                "Creating API token collection %s in database %s",
+                collection_name,
+                database.name,
+            )
+            await database.create_collection(collection_name)
+
+        collection = database[collection_name]
+        try:
+            await collection.create_index("token_hash", unique=True)
+        except PyMongoError as error:
+            logger.exception("Failed to ensure API token indexes: %s", error)
+            raise MongoConnectionError("Failed to ensure MongoDB token indexes.") from error
+
+        self._token_collection = collection
+
+    async def get_timeseries_collection_for_database(
+        self, database_name: str
+    ) -> AsyncIOMotorCollection:
+        """Return the time-series collection associated with ``database_name``."""
+
+        if database_name in self._collection_cache:
+            return self._collection_cache[database_name]
+
+        database = await self._get_database(database_name)
+        return await self._ensure_timeseries_collection(database, database_name)
 
     async def close(self) -> None:
         """Terminate the MongoDB connection."""
@@ -128,6 +200,9 @@ class MongoDBManager:
             self._client = None
             self._database = None
             self._collection = None
+            self._token_collection = None
+            self._database_cache = {}
+            self._collection_cache = {}
 
 
 mongo_manager = MongoDBManager()

@@ -5,14 +5,14 @@ from __future__ import annotations
 import pytest
 from fastapi.testclient import TestClient
 
-from app.dependencies import get_timeseries_collection
 from app.main import app
 from app.db.mongo import mongo_manager
 from app.services import records as service
+from app.services.tokens import TokenNotFoundError
 
 
 @pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+def client_without_token(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     """Create a FastAPI test client with MongoDB interactions disabled."""
 
     async def fake_connect() -> None:  # pragma: no cover - trivial coroutine
@@ -21,18 +21,54 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     async def fake_close() -> None:  # pragma: no cover - trivial coroutine
         return None
 
+    async def fake_get_collection(database_name: str):  # pragma: no cover - trivial coroutine
+        return object()
+
     monkeypatch.setattr(mongo_manager, "connect", fake_connect)
     monkeypatch.setattr(mongo_manager, "close", fake_close)
-
-    async def override_collection():
-        yield object()
-
-    app.dependency_overrides[get_timeseries_collection] = override_collection
+    monkeypatch.setattr(
+        mongo_manager,
+        "get_timeseries_collection_for_database",
+        fake_get_collection,
+    )
 
     with TestClient(app) as test_client:
         yield test_client
 
-    app.dependency_overrides.pop(get_timeseries_collection, None)
+
+@pytest.fixture()
+def client(client_without_token: TestClient) -> TestClient:
+    """Provide a test client with the administrator token pre-configured."""
+
+    client_without_token.headers.update({"X-API-Token": "test-admin-token"})
+    return client_without_token
+
+
+def test_records_require_token(client_without_token: TestClient) -> None:
+    """Ensure requests without a token are rejected."""
+
+    response = client_without_token.get("/api/records/search")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "API token required."
+
+
+def test_records_reject_invalid_token(
+    monkeypatch: pytest.MonkeyPatch, client_without_token: TestClient
+) -> None:
+    """Ensure invalid tokens trigger a 401 response."""
+
+    async def fake_fetch_token_metadata(token: str):  # pragma: no cover - trivial coroutine
+        raise TokenNotFoundError("Invalid API token.")
+
+    monkeypatch.setattr("app.dependencies.fetch_token_metadata", fake_fetch_token_metadata)
+
+    response = client_without_token.get(
+        "/api/records/search", headers={"X-API-Token": "invalid-token"}
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid API token."
 
 
 def test_search_rejects_inverted_time_range(monkeypatch: pytest.MonkeyPatch, client: TestClient) -> None:

@@ -64,6 +64,13 @@ class Settings(BaseSettings):
 
     allowed_origins: List[str] = Field(default_factory=list, alias="ALLOWED_ORIGINS")
 
+    api_admin_token: str = Field(default=..., alias="API_ADMIN_TOKEN")
+    enable_token_creation_route: bool = Field(
+        default=False,
+        alias="ENABLE_TOKEN_CREATION_ROUTE",
+    )
+    api_tokens_collection: str = Field(default="api_tokens", alias="API_TOKENS_COLLECTION")
+
     model_config = SettingsConfigDict(
         env_file=str(Path(__file__).resolve().parents[2] / ".env"),
         env_file_encoding="utf-8",

@@ -9,7 +9,7 @@ Esta API utiliza FastAPI para expor operações de CRUD sobre uma coleção de s
 
 ## Configuração
 
-1. Copie o arquivo `.env.example` para `.env` e ajuste os valores conforme o seu ambiente.
+1. Copie o arquivo `.env.example` para `.env` e ajuste os valores conforme o seu ambiente, definindo obrigatoriamente `API_ADMIN_TOKEN` (token administrador) e, opcionalmente, `ENABLE_TOKEN_CREATION_ROUTE` caso deseje habilitar a rota de criação de tokens.
 2. Crie um ambiente virtual e instale as dependências:
 
 ```bash
@@ -27,10 +27,31 @@ uvicorn app.main:app --reload
 
 O parâmetro `--reload` garante que alterações no código sejam refletidas automaticamente durante o desenvolvimento.
 
+## Autenticação e gerenciamento de tokens
+
+Todas as rotas sob `/api` exigem o cabeçalho `X-API-Token`. Defina um valor para `API_ADMIN_TOKEN` no arquivo `.env` para obter um token com acesso completo. Opcionalmente é possível informar `X-Database-Name` em conjunto com o token de administrador para direcionar chamadas a outra base de dados; quando omitido, a aplicação utiliza o valor de `MONGODB_DATABASE`.
+
+Quando `ENABLE_TOKEN_CREATION_ROUTE=true`, a rota `POST /api/tokens` fica disponível (ela não aparece na documentação pública) e permite emitir novos tokens persistidos na coleção definida por `API_TOKENS_COLLECTION`. Ao criar um token para uma base inexistente, o serviço cria automaticamente o banco e a coleção time-series configurada, garantindo que as próximas requisições já encontrem a estrutura necessária.
+
+Exemplo de criação de token:
+
+```bash
+curl -X POST http://localhost:8000/api/tokens \
+  -H "X-API-Token: ${API_ADMIN_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+        "database": "validationsplugin",
+        "description": "Token de pipeline"
+      }'
+```
+
+A resposta conterá o campo `token` (exibido apenas uma vez); armazene-o com segurança. Todos os tokens são guardados no MongoDB utilizando hash SHA-256 e têm o campo `last_used_at` atualizado sempre que forem utilizados.
+
 ### Exemplo de escrita rápida via `curl`
 
 ```bash
 curl -X POST http://localhost:8000/api/records \
+  -H "X-API-Token: <seu-token>" \
   -H "Content-Type: application/json" \
   -d '{
         "acronym": "swe",
@@ -43,16 +64,22 @@ curl -X POST http://localhost:8000/api/records \
 ### Exemplo de busca
 
 ```bash
-curl "http://localhost:8000/api/records/search?field=source&value=swe&latest=true"
+curl \
+  -H "X-API-Token: <seu-token>" \
+  "http://localhost:8000/api/records/search?field=source&value=swe&latest=true"
 ```
 
 Qualquer campo armazenado pode ser utilizado na busca, inclusive campos aninhados usando dot-notation:
 
 ```bash
-curl "http://localhost:8000/api/records/search?field=payload.healthcheck&value=true&latest=true"
+curl \
+  -H "X-API-Token: <seu-token>" \
+  "http://localhost:8000/api/records/search?field=payload.healthcheck&value=true&latest=true"
 ```
 
 ## Endpoints principais
+
+Todos os endpoints abaixo exigem o cabeçalho `X-API-Token`.
 
 - `GET /healthz` — Verifica se o serviço está disponível.
 - `POST /api/records` — Insere um novo registro de série temporal.
