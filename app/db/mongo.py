@@ -149,8 +149,49 @@ class MongoDBManager:
         """Ensure indexes exist for efficient time-based queries."""
 
         settings = get_settings()
+        time_field = settings.timeseries_time_field
+        index_name = f"{time_field}_1"
+        ttl_seconds = settings.mongodb_collection_ttl_seconds
+        desired_ttl = ttl_seconds if ttl_seconds is not None and ttl_seconds > 0 else None
+
         try:
-            await collection.create_index([(settings.timeseries_time_field, ASCENDING)])
+            existing_indexes = await collection.index_information()
+        except PyMongoError as error:
+            logger.exception("Failed to inspect existing indexes: %s", error)
+            raise MongoConnectionError("Failed to ensure MongoDB indexes.") from error
+
+        existing_index = existing_indexes.get(index_name)
+        current_ttl = (
+            existing_index.get("expireAfterSeconds") if existing_index is not None else None
+        )
+
+        try:
+            if desired_ttl is None:
+                if existing_index is None:
+                    await collection.create_index(
+                        [(time_field, ASCENDING)],
+                        name=index_name,
+                    )
+                elif current_ttl is not None:
+                    await collection.drop_index(index_name)
+                    await collection.create_index(
+                        [(time_field, ASCENDING)],
+                        name=index_name,
+                    )
+            else:
+                if existing_index is None:
+                    await collection.create_index(
+                        [(time_field, ASCENDING)],
+                        expireAfterSeconds=desired_ttl,
+                        name=index_name,
+                    )
+                elif current_ttl != desired_ttl:
+                    await collection.drop_index(index_name)
+                    await collection.create_index(
+                        [(time_field, ASCENDING)],
+                        expireAfterSeconds=desired_ttl,
+                        name=index_name,
+                    )
         except PyMongoError as error:
             logger.exception("Failed to ensure indexes: %s", error)
             raise MongoConnectionError("Failed to ensure MongoDB indexes.") from error

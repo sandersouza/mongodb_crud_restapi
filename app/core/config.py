@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     mongodb_username: Optional[str] = Field(default=None, alias="MONGODB_USERNAME")
     mongodb_password: Optional[str] = Field(default=None, alias="MONGODB_PASSWORD")
     mongodb_collection: str = Field(default="measurements", alias="MONGODB_COLLECTION")
+    mongodb_collection_ttl_seconds: Optional[int] = Field(
+        default=None,
+        alias="MONGODB_COLLECTION_TTL_SECONDS",
+        ge=0,
+    )
     mongodb_max_pool_size: int = Field(default=10, alias="MONGODB_MAX_POOL_SIZE")
 
     timeseries_time_field: str = Field(default="timestamp", alias="TIMESERIES_TIME_FIELD")
@@ -85,6 +90,17 @@ class Settings(BaseSettings):
             return []
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    @field_validator("mongodb_collection_ttl_seconds", mode="before")
+    @classmethod
+    def allow_empty_ttl(cls, value):
+        """Treat empty strings as unset values for the TTL configuration."""
+
+        if value is None:
+            return None
+        if isinstance(value, str) and value.strip() == "":
+            return None
         return value
 
     @classmethod

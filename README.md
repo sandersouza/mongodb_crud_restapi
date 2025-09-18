@@ -103,6 +103,9 @@ export ACCESS_TOKEN="<token-de-acesso>"
 
 Caso prefira usar o token administrador para essas rotas, acrescente `-H "X-Database-Name: <nome-da-base>"` em cada comando.
 
+Para habilitar a remoção automática de documentos antigos, defina `MONGODB_COLLECTION_TTL_SECONDS` com o tempo desejado em segundos.
+Quando o valor estiver em branco ou for `0`, nenhum índice TTL é criado e os dados permanecem indefinidamente na coleção.
+
 #### Criar registro (`POST /api/records`)
 Persiste um novo registro de série temporal. O campo `acronym` é um alias para `source`; utilize o que for mais conveniente. O serviço garante que a coleção time-series exista e cria índices necessários.
 
