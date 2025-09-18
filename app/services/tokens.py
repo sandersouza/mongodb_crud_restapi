@@ -9,8 +9,6 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
-from pymongo.errors import DuplicateKeyError, PyMongoError
-
 from ..db.mongo import MongoConnectionError, mongo_manager
 
 logger = logging.getLogger(__name__)
@@ -30,6 +28,20 @@ class TokenConflictError(TokenServiceError):
 
 class TokenPersistenceError(TokenServiceError):
     """Raised when the token collection cannot be queried or updated."""
+
+
+def _require_pymongo_errors():
+    """Import PyMongo exceptions, raising a helpful message if missing."""
+
+    try:
+        from pymongo.errors import DuplicateKeyError, PyMongoError
+    except ModuleNotFoundError as error:  # pragma: no cover - import guard
+        raise TokenPersistenceError(
+            "The 'pymongo' dependency is required for token storage. "
+            "Install it with `pip install pymongo`."
+        ) from error
+
+    return DuplicateKeyError, PyMongoError
 
 
 @dataclass
@@ -68,6 +80,7 @@ async def fetch_token_metadata(token: str) -> TokenMetadata:
 
     token_hash = _hash_token(token)
 
+    _, PyMongoError = _require_pymongo_errors()
     try:
         document = await collection.find_one({"token_hash": token_hash})
     except PyMongoError as error:
@@ -131,6 +144,7 @@ async def create_token(
         "last_used_at": None,
     }
 
+    DuplicateKeyError, PyMongoError = _require_pymongo_errors()
     try:
         await collection.insert_one(document)
     except DuplicateKeyError as error:

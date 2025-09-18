@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import copy
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
-from bson import ObjectId
-from motor.motor_asyncio import AsyncIOMotorCollection
-from pymongo import DESCENDING, ReturnDocument
-from pymongo.errors import OperationFailure, PyMongoError
+if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
+    from bson import ObjectId
+    from motor.motor_asyncio import AsyncIOMotorCollection
+    from pymongo.errors import OperationFailure
 
 from ..models.time_series import (
     TimeSeriesRecordCreate,
@@ -41,6 +41,12 @@ class RecordQueryError(RuntimeError):
 
 class EmptyUpdateError(ValueError):
     """Raised when no fields are supplied for an update operation."""
+
+
+_MISSING_PYMONGO_MESSAGE = (
+    "The 'pymongo' dependency is required for MongoDB operations. "
+    "Install it with `pip install pymongo`."
+)
 
 
 def _build_field_aliases() -> Dict[str, str]:
@@ -93,8 +99,16 @@ def _serialize(document: Dict[str, Any]) -> Dict[str, Any]:
     return document
 
 
-def _object_id(value: str) -> ObjectId:
+def _object_id(value: str) -> "ObjectId":
     """Convert a string to :class:`ObjectId` raising friendly errors."""
+
+    try:
+        from bson import ObjectId
+    except ModuleNotFoundError as error:  # pragma: no cover - import guard
+        raise InvalidRecordIdError(
+            "The 'pymongo' dependency is required to work with MongoDB ObjectId values. "
+            "Install it with `pip install pymongo`."
+        ) from error
 
     try:
         return ObjectId(value)
@@ -115,6 +129,11 @@ async def create_record(
     payload: TimeSeriesRecordCreate,
 ) -> Dict[str, Any]:
     """Insert a new time-series record into MongoDB."""
+
+    try:
+        from pymongo.errors import PyMongoError
+    except ModuleNotFoundError as error:  # pragma: no cover - import guard
+        raise RecordPersistenceError(_MISSING_PYMONGO_MESSAGE) from error
 
     document = payload.model_dump(by_alias=True)
     document.setdefault("timestamp", datetime.now(tz=timezone.utc))
@@ -151,6 +170,12 @@ async def list_records(
     """Return a paginated list of time-series records ordered by timestamp."""
 
     try:
+        from pymongo import DESCENDING
+        from pymongo.errors import PyMongoError
+    except ModuleNotFoundError as error:  # pragma: no cover - import guard
+        raise RecordQueryError(_MISSING_PYMONGO_MESSAGE) from error
+
+    try:
         cursor = (
             collection.find().sort("timestamp", DESCENDING).skip(skip).limit(limit)
         )
@@ -167,6 +192,11 @@ async def update_record(
     updates: TimeSeriesRecordUpdate,
 ) -> Dict[str, Any]:
     """Update an existing record with the provided fields."""
+
+    try:
+        from pymongo.errors import PyMongoError
+    except ModuleNotFoundError as error:  # pragma: no cover - import guard
+        raise RecordPersistenceError(_MISSING_PYMONGO_MESSAGE) from error
 
     oid = _object_id(record_id)
     update_payload = {
@@ -197,6 +227,12 @@ async def _apply_update(
     update_payload: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Apply an update honoring MongoDB time-series constraints."""
+
+    try:
+        from pymongo import ReturnDocument
+        from pymongo.errors import OperationFailure, PyMongoError
+    except ModuleNotFoundError as error:  # pragma: no cover - import guard
+        raise RecordPersistenceError(_MISSING_PYMONGO_MESSAGE) from error
 
     metadata_only = set(update_payload.keys()) <= {"metadata"}
     metadata_exception: Optional[OperationFailure] = None
@@ -236,6 +272,11 @@ async def _replace_document(
 ) -> Dict[str, Any]:
     """Replace a document to emulate updates on measurement fields."""
 
+    try:
+        from pymongo.errors import OperationFailure
+    except ModuleNotFoundError as error:  # pragma: no cover - import guard
+        raise RecordPersistenceError(_MISSING_PYMONGO_MESSAGE) from error
+
     if existing_document is None:
         existing_document = await collection.find_one({"_id": oid})
 
@@ -270,6 +311,11 @@ async def _delete_and_reinsert(
     replacement: Dict[str, Any],
 ) -> Dict[str, Any]:
     """Fallback strategy when direct updates are rejected by MongoDB."""
+
+    try:
+        from pymongo.errors import PyMongoError
+    except ModuleNotFoundError as error:  # pragma: no cover - import guard
+        raise RecordPersistenceError(_MISSING_PYMONGO_MESSAGE) from error
 
     delete_result = await collection.delete_one({"_id": original["_id"]})
     if delete_result.deleted_count == 0:
@@ -315,6 +361,11 @@ async def delete_record(
 ) -> None:
     """Remove a record from MongoDB."""
 
+    try:
+        from pymongo.errors import PyMongoError
+    except ModuleNotFoundError as error:  # pragma: no cover - import guard
+        raise RecordDeletionError(_MISSING_PYMONGO_MESSAGE) from error
+
     oid = _object_id(record_id)
 
     try:
@@ -336,6 +387,12 @@ async def search_records(
     limit: int,
 ) -> Tuple[List[Dict[str, Any]], bool]:
     """Search records with optional filters and pagination."""
+
+    try:
+        from pymongo import DESCENDING
+        from pymongo.errors import PyMongoError
+    except ModuleNotFoundError as error:  # pragma: no cover - import guard
+        raise RecordQueryError(_MISSING_PYMONGO_MESSAGE) from error
 
     query: Dict[str, Any] = {}
 

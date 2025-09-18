@@ -29,6 +29,12 @@
       "value": "",
       "type": "string",
       "description": "Token administrador definido em API_ADMIN_TOKEN para gerenciar credenciais."
+    },
+    {
+      "key": "adminDatabase",
+      "value": "",
+      "type": "string",
+      "description": "Nome da base que deve ser informada no cabeçalho X-Database-Name ao usar o token administrador."
     }
   ],
   "item": [
@@ -293,6 +299,10 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-Database-Name",
+                "value": "{{adminDatabase}}"
               }
             ],
             "body": {
@@ -314,7 +324,7 @@
                 "tokens"
               ]
             },
-            "description": "Emite um novo token associado à base informada. Requer habilitar ENABLE_TOKEN_CREATION_ROUTE=true."
+            "description": "Emite um novo token associado à base informada. Requer habilitar ENABLE_TOKEN_CREATION_ROUTE=true.\n\nAo usar o token administrador, inclua o cabeçalho X-Database-Name apontando para a base de destino."
           },
           "response": [
             {

@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from motor.motor_asyncio import AsyncIOMotorCollection
+
+if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
+    from motor.motor_asyncio import AsyncIOMotorCollection
 
 from ..dependencies import get_timeseries_collection
 from ..models.time_series import (
@@ -202,5 +204,4 @@ async def delete_record(
         _raise_http_error(error)
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
-
 
