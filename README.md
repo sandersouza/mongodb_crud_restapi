@@ -103,8 +103,7 @@ export ACCESS_TOKEN="<token-de-acesso>"
 
 Caso prefira usar o token administrador para essas rotas, acrescente `-H "X-Database-Name: <nome-da-base>"` em cada comando.
 
-Para habilitar a remoção automática de documentos antigos, defina `MONGODB_COLLECTION_TTL_SECONDS` com o tempo desejado em segundos.
-Quando o valor estiver em branco ou for `0`, nenhum índice TTL é criado e os dados permanecem indefinidamente na coleção.
+Para habilitar a remoção automática de documentos antigos, informe `expires_in_seconds` ao criar o registro. O serviço grava um `expires_at` correspondente (com base no `timestamp` informado) e mantém um índice TTL para que o MongoDB exclua automaticamente os documentos expirados. Quando o campo é omitido ou `0`, o registro permanece indefinidamente.
 
 #### Criar registro (`POST /api/records`)
 Persiste um novo registro de série temporal. O campo `acronym` é um alias para `source`; utilize o que for mais conveniente. O serviço garante que a coleção time-series exista e cria índices necessários.
@@ -122,11 +121,12 @@ curl -X POST http://localhost:8000/api/records \
           "bulkhead": false,
           "ratelimit": false
         },
-        "metadata": {"technology": "python"}
+        "metadata": {"technology": "python"},
+        "expires_in_seconds": 3600
       }'
 ```
 
-A resposta (`201 Created`) retorna o documento completo, incluindo `id` (ObjectId em formato de string) e `timestamp` em ISO-8601.
+A resposta (`201 Created`) retorna o documento completo, incluindo `id` (ObjectId em formato de string), `timestamp` e, quando configurado, `expires_at` em ISO-8601.
 
 #### Listar registros (`GET /api/records`)
 Retorna os registros mais recentes primeiro. Use `limit` (1-1000) e `skip` para paginação simples.

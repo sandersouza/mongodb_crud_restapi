@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_serializer
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_serializer, field_validator
 
 
 class TimeSeriesRecordBase(BaseModel):
@@ -40,6 +40,23 @@ class TimeSeriesRecordBase(BaseModel):
 class TimeSeriesRecordCreate(TimeSeriesRecordBase):
     """Payload required to create a new time-series record."""
 
+    expires_in_seconds: Optional[int] = Field(
+        default=None,
+        description=(
+            "Optional TTL for the record expressed in seconds. "
+            "If omitted or set to 0 the record never expires."
+        ),
+    )
+
+    @field_validator("expires_in_seconds")
+    @classmethod
+    def validate_ttl(cls, value: Optional[int]) -> Optional[int]:
+        if value is None:
+            return None
+        if value < 0:
+            raise ValueError("expires_in_seconds must be greater than or equal to 0.")
+        return value
+
 
 class TimeSeriesRecordUpdate(BaseModel):
     """Payload used for partial updates of a record."""
@@ -66,18 +83,34 @@ class TimeSeriesRecordUpdate(BaseModel):
         None,
         description="Override timestamp for the record (UTC).",
     )
+    expires_at: Optional[datetime] = Field(
+        None,
+        description="UTC timestamp indicating when the record should expire.",
+    )
 
 
 class TimeSeriesRecordOut(TimeSeriesRecordBase):
     """Representation of a record returned to API consumers."""
 
     id: str = Field(..., description="MongoDB unique identifier for the record.")
+    expires_at: Optional[datetime] = Field(
+        default=None,
+        description="UTC timestamp indicating when the record will expire, if any.",
+    )
 
     @field_serializer("timestamp")
     def _serialize_timestamp(self, timestamp: datetime) -> str:
         """Render timestamps using ISO-8601 formatting when serializing to JSON."""
 
         return timestamp.isoformat()
+
+    @field_serializer("expires_at")
+    def _serialize_expires_at(self, expires_at: Optional[datetime]) -> Optional[str]:
+        """Render expiration timestamps using ISO-8601 formatting when serializing to JSON."""
+
+        if expires_at is None:
+            return None
+        return expires_at.isoformat()
 
 
 class TimeSeriesSearchResponse(BaseModel):

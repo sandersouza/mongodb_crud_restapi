@@ -119,9 +119,6 @@ class MongoDBManager:
 
         settings = get_settings()
 
-        ttl_seconds = settings.mongodb_collection_ttl_seconds
-        desired_ttl = ttl_seconds if ttl_seconds is not None and ttl_seconds > 0 else None
-
         existing_collections = await database.list_collection_names()
         if settings.mongodb_collection not in existing_collections:
             logger.info(
@@ -132,13 +129,10 @@ class MongoDBManager:
             timeseries_options = {"timeField": settings.timeseries_time_field}
             if settings.timeseries_meta_field:
                 timeseries_options["metaField"] = settings.timeseries_meta_field
-            collection_kwargs = {"timeseries": timeseries_options}
-            if desired_ttl is not None:
-                collection_kwargs["expireAfterSeconds"] = desired_ttl
             try:
                 await database.create_collection(
                     settings.mongodb_collection,
-                    **collection_kwargs,
+                    timeseries=timeseries_options,
                 )
             except CollectionInvalid:
                 logger.warning(
@@ -147,11 +141,6 @@ class MongoDBManager:
                 )
 
         collection = database[settings.mongodb_collection]
-        await self._synchronize_collection_ttl(
-            database,
-            settings.mongodb_collection,
-            desired_ttl,
-        )
         await self._ensure_indexes(collection)
         self._collection_cache[database_name] = collection
         return collection
@@ -177,78 +166,61 @@ class MongoDBManager:
         try:
             if existing_index is None:
                 await collection.create_index(index_specification, **index_kwargs)
-                return
+            else:
+                needs_recreation = False
 
-            needs_recreation = False
+                existing_keys = existing_index.get("key") if existing_index is not None else None
+                if existing_keys is None or list(existing_keys) != index_specification:
+                    needs_recreation = True
 
-            existing_keys = existing_index.get("key") if existing_index is not None else None
-            if existing_keys is None or list(existing_keys) != index_specification:
-                needs_recreation = True
+                if existing_index.get("expireAfterSeconds") is not None:
+                    needs_recreation = True
 
-            if existing_index.get("expireAfterSeconds") is not None:
-                needs_recreation = True
+                if existing_index.get("partialFilterExpression") is not None:
+                    needs_recreation = True
 
-            if existing_index.get("partialFilterExpression") is not None:
-                needs_recreation = True
+                if needs_recreation:
+                    await collection.drop_index(index_name)
+                    await collection.create_index(index_specification, **index_kwargs)
 
-            if needs_recreation:
-                await collection.drop_index(index_name)
-                await collection.create_index(index_specification, **index_kwargs)
+            ttl_index_candidates = [
+                ("expires_at_ttl", existing_indexes.get("expires_at_ttl")),
+                ("expires_at_1", existing_indexes.get("expires_at_1")),
+            ]
+            ttl_index_name = "expires_at_ttl"
+            existing_ttl_name = ttl_index_name
+            existing_ttl = None
+            for candidate_name, index_info in ttl_index_candidates:
+                if index_info is not None:
+                    existing_ttl_name = candidate_name
+                    existing_ttl = index_info
+                    break
+
+            ttl_specification: List[Tuple[str, int]] = [("expires_at", ASCENDING)]
+            ttl_kwargs = {"name": ttl_index_name, "expireAfterSeconds": 0}
+
+            if existing_ttl is None:
+                await collection.create_index(ttl_specification, **ttl_kwargs)
+            else:
+                ttl_keys = existing_ttl.get("key") if existing_ttl is not None else None
+                ttl_expire_after = existing_ttl.get("expireAfterSeconds")
+                needs_ttl_recreation = False
+
+                if ttl_keys is None or list(ttl_keys) != ttl_specification:
+                    needs_ttl_recreation = True
+
+                if ttl_expire_after not in (0, 0.0):
+                    needs_ttl_recreation = True
+
+                if existing_ttl_name != ttl_index_name:
+                    needs_ttl_recreation = True
+
+                if needs_ttl_recreation:
+                    await collection.drop_index(existing_ttl_name)
+                    await collection.create_index(ttl_specification, **ttl_kwargs)
         except PyMongoError as error:
             logger.exception("Failed to ensure indexes: %s", error)
             raise MongoConnectionError("Failed to ensure MongoDB indexes.") from error
-
-    async def _synchronize_collection_ttl(
-        self,
-        database: AsyncIOMotorDatabase,
-        collection_name: str,
-        desired_ttl: Optional[int],
-    ) -> None:
-        """Ensure the collection's automatic expiration matches configuration."""
-
-        try:
-            cursor = await database.list_collections(filter={"name": collection_name})
-            collection_info = await cursor.to_list(length=1)
-        except PyMongoError as error:
-            logger.exception("Failed to inspect collection TTL configuration: %s", error)
-            raise MongoConnectionError("Failed to configure MongoDB TTL.") from error
-
-        if not collection_info:
-            return
-
-        options = collection_info[0].get("options", {})
-        current_raw = options.get("expireAfterSeconds")
-        current_ttl: Optional[int]
-        if current_raw in (None, "off"):
-            current_ttl = None
-        else:
-            try:
-                current_ttl = int(current_raw)
-            except (TypeError, ValueError):  # pragma: no cover - defensive fallback
-                current_ttl = None
-
-        if desired_ttl is None:
-            if current_ttl is None:
-                return
-            try:
-                await database.command(
-                    {"collMod": collection_name, "expireAfterSeconds": "off"}
-                )
-            except PyMongoError as error:
-                logger.exception("Failed to disable collection TTL: %s", error)
-                raise MongoConnectionError("Failed to configure MongoDB TTL.") from error
-            return
-
-        if current_ttl == desired_ttl:
-            return
-
-        try:
-            await database.command(
-                {"collMod": collection_name, "expireAfterSeconds": desired_ttl}
-            )
-        except PyMongoError as error:
-            logger.exception("Failed to update collection TTL: %s", error)
-            raise MongoConnectionError("Failed to configure MongoDB TTL.") from error
 
     async def _ensure_token_collection(
         self, database: AsyncIOMotorDatabase

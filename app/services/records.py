@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import copy
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
 
 if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
@@ -136,8 +136,12 @@ async def create_record(
         raise RecordPersistenceError(_MISSING_PYMONGO_MESSAGE) from error
 
     document = payload.model_dump(by_alias=True)
+    expires_in_seconds = document.pop("expires_in_seconds", None)
     document.setdefault("timestamp", datetime.now(tz=timezone.utc))
     document["timestamp"] = _normalize_timestamp(document["timestamp"])
+
+    if expires_in_seconds and expires_in_seconds > 0:
+        document["expires_at"] = document["timestamp"] + timedelta(seconds=expires_in_seconds)
 
     try:
         result = await collection.insert_one(document)
@@ -205,6 +209,9 @@ async def update_record(
 
     if "timestamp" in update_payload and isinstance(update_payload["timestamp"], datetime):
         update_payload["timestamp"] = _normalize_timestamp(update_payload["timestamp"])
+
+    if "expires_at" in update_payload and isinstance(update_payload["expires_at"], datetime):
+        update_payload["expires_at"] = _normalize_timestamp(update_payload["expires_at"])
 
     if not update_payload:
         raise EmptyUpdateError("At least one field must be provided for update.")
