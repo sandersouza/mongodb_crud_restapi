@@ -60,6 +60,10 @@ class Settings(BaseSettings):
 
     timeseries_time_field: str = Field(default="timestamp", alias="TIMESERIES_TIME_FIELD")
     timeseries_meta_field: Optional[str] = Field(default="metadata", alias="TIMESERIES_META_FIELD")
+    expiration_cleanup_interval_seconds: int = Field(
+        default=300,
+        alias="EXPIRATION_CLEANUP_INTERVAL_SECONDS",
+    )
 
     allowed_origins: List[str] = Field(default_factory=list, alias="ALLOWED_ORIGINS")
 

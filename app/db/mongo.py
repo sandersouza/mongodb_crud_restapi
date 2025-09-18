@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set, Tuple, TYPE_CHECKING
 
 try:  # pragma: no cover - optional dependency
@@ -48,6 +49,8 @@ class MongoDBManager:
         self._collection_cache: Dict[str, AsyncIOMotorCollection] = {}
         self._token_collection_cache: Dict[str, AsyncIOMotorCollection] = {}
         self._token_hash_cache: Dict[str, str] = {}
+        self._timeseries_cleanup_tracker: Dict[str, datetime] = {}
+        self._token_cleanup_tracker: Dict[str, datetime] = {}
 
     @property
     def client(self) -> AsyncIOMotorClient:
@@ -94,6 +97,8 @@ class MongoDBManager:
         self._collection_cache.clear()
         self._token_collection_cache.clear()
         self._token_hash_cache.clear()
+        self._timeseries_cleanup_tracker.clear()
+        self._token_cleanup_tracker.clear()
 
     async def _get_database(self, database_name: str) -> AsyncIOMotorDatabase:
         """Return (and cache) a database instance, creating it if necessary."""
@@ -202,6 +207,140 @@ class MongoDBManager:
             logger.exception("Failed to ensure indexes: %s", error)
             raise MongoConnectionError("Failed to ensure MongoDB indexes.") from error
 
+    def _should_run_cleanup(
+        self,
+        tracker: Dict[str, datetime],
+        key: str,
+        now: datetime,
+        interval_seconds: int,
+    ) -> bool:
+        """Return ``True`` when cleanup should execute for ``key``."""
+
+        last_run = tracker.get(key)
+        if last_run is None:
+            tracker[key] = now
+            return True
+
+        interval = timedelta(seconds=max(interval_seconds, 0))
+        if interval <= timedelta(0):
+            tracker[key] = now
+            return True
+
+        if now - last_run >= interval:
+            tracker[key] = now
+            return True
+
+        return False
+
+    async def _cleanup_timeseries_collection(
+        self,
+        collection: "AsyncIOMotorCollection",
+        database_name: str,
+    ) -> None:
+        """Best-effort removal of expired time-series documents."""
+
+        settings = get_settings()
+        interval = settings.expiration_cleanup_interval_seconds
+        now = datetime.now(timezone.utc)
+
+        should_cleanup = interval <= 0 or self._should_run_cleanup(
+            self._timeseries_cleanup_tracker,
+            database_name,
+            now,
+            interval,
+        )
+
+        if not should_cleanup:
+            return
+
+        try:
+            result = await collection.delete_many({"expires_at": {"$lte": now}})
+        except PyMongoError as error:
+            logger.warning(
+                "Failed to purge expired time-series documents for %s.%s: %s",
+                database_name,
+                settings.mongodb_collection,
+                error,
+            )
+            return
+
+        deleted = getattr(result, "deleted_count", 0)
+        if deleted:
+            logger.info(
+                "Removed %d expired documents from %s.%s",
+                deleted,
+                database_name,
+                settings.mongodb_collection,
+            )
+
+    async def _cleanup_token_collection(
+        self,
+        collection: "AsyncIOMotorCollection",
+        database_name: str,
+    ) -> None:
+        """Remove expired API tokens and clear their cached lookups."""
+
+        settings = get_settings()
+        interval = settings.expiration_cleanup_interval_seconds
+        now = datetime.now(timezone.utc)
+
+        should_cleanup = interval <= 0 or self._should_run_cleanup(
+            self._token_cleanup_tracker,
+            database_name,
+            now,
+            interval,
+        )
+
+        if not should_cleanup:
+            return
+
+        try:
+            cursor = collection.find(
+                {"expires_at": {"$lte": now}},
+                projection={"_id": 1, "token_hash": 1},
+            )
+            expired_documents = await cursor.to_list(length=None)
+        except PyMongoError as error:
+            logger.warning(
+                "Failed to inspect expired API tokens for %s.%s: %s",
+                database_name,
+                settings.api_tokens_collection,
+                error,
+            )
+            return
+
+        if not expired_documents:
+            return
+
+        token_ids = [doc.get("_id") for doc in expired_documents if doc.get("_id") is not None]
+        if not token_ids:
+            return
+
+        try:
+            result = await collection.delete_many({"_id": {"$in": token_ids}})
+        except PyMongoError as error:
+            logger.warning(
+                "Failed to delete expired API tokens for %s.%s: %s",
+                database_name,
+                settings.api_tokens_collection,
+                error,
+            )
+            return
+
+        deleted = getattr(result, "deleted_count", 0)
+        if deleted:
+            logger.info(
+                "Removed %d expired API tokens from %s.%s",
+                deleted,
+                database_name,
+                settings.api_tokens_collection,
+            )
+
+        for document in expired_documents:
+            token_hash = document.get("token_hash")
+            if token_hash:
+                self._token_hash_cache.pop(token_hash, None)
+
     async def _ensure_token_collection(
         self, database: AsyncIOMotorDatabase
     ) -> AsyncIOMotorCollection:
@@ -244,18 +383,27 @@ class MongoDBManager:
         """Return the time-series collection associated with ``database_name``."""
 
         if database_name in self._collection_cache:
-            return self._collection_cache[database_name]
+            collection = self._collection_cache[database_name]
+        else:
+            database = await self._get_database(database_name)
+            collection = await self._ensure_timeseries_collection(database, database_name)
 
-        database = await self._get_database(database_name)
-        return await self._ensure_timeseries_collection(database, database_name)
+        await self._cleanup_timeseries_collection(collection, database_name)
+        return collection
 
     async def get_token_collection_for_database(
         self, database_name: str
     ) -> AsyncIOMotorCollection:
         """Return the token collection stored inside ``database_name``."""
 
-        database = await self._get_database(database_name)
-        return await self._ensure_token_collection(database)
+        if database_name in self._token_collection_cache:
+            collection = self._token_collection_cache[database_name]
+        else:
+            database = await self._get_database(database_name)
+            collection = await self._ensure_token_collection(database)
+
+        await self._cleanup_token_collection(collection, database_name)
+        return collection
 
     def remember_token_location(self, token_hash: str, database_name: str) -> None:
         """Cache the database where ``token_hash`` is persisted."""
@@ -291,6 +439,7 @@ class MongoDBManager:
 
         for cached_name, collection in list(self._token_collection_cache.items()):
             if database_name is None or cached_name == database_name:
+                await self._cleanup_token_collection(collection, cached_name)
                 collections.append((cached_name, collection))
                 seen.add(cached_name)
 
@@ -315,6 +464,7 @@ class MongoDBManager:
                 continue
 
             collection = await self._ensure_token_collection(database)
+            await self._cleanup_token_collection(collection, name)
             collections.append((name, collection))
             seen.add(name)
 

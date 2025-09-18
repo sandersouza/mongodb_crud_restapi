@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, call
+from unittest.mock import ANY, AsyncMock, MagicMock, call
 
 import pytest
 
@@ -23,6 +23,8 @@ class _FakeSettings:
         self.timeseries_time_field = "timestamp"
         self.timeseries_meta_field = "metadata"
         self.mongodb_collection = "measurements"
+        self.api_tokens_collection = "api_tokens"
+        self.expiration_cleanup_interval_seconds = 300
 
 
 @pytest.mark.anyio
@@ -212,3 +214,111 @@ async def test_ensure_timeseries_collection_creates_collection_when_missing(
     )
     ensure_indexes_mock.assert_awaited_once_with(collection)
     assert result is collection
+
+
+@pytest.mark.anyio
+async def test_get_timeseries_collection_triggers_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure cached time-series collections purge expired documents."""
+
+    manager = MongoDBManager()
+    settings = _FakeSettings()
+    settings.expiration_cleanup_interval_seconds = 0
+    monkeypatch.setattr("app.db.mongo.get_settings", lambda: settings)
+
+    collection = AsyncMock()
+    collection.delete_many.return_value.deleted_count = 0
+    manager._collection_cache["analytics"] = collection
+
+    await manager.get_timeseries_collection_for_database("analytics")
+
+    assert collection.delete_many.await_args_list == [call({"expires_at": {"$lte": ANY}})]
+
+
+@pytest.mark.anyio
+async def test_get_timeseries_collection_respects_cleanup_interval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure cleanup does not run again before the configured interval."""
+
+    manager = MongoDBManager()
+    settings = _FakeSettings()
+    settings.expiration_cleanup_interval_seconds = 3600
+    monkeypatch.setattr("app.db.mongo.get_settings", lambda: settings)
+
+    collection = AsyncMock()
+    collection.delete_many.return_value.deleted_count = 0
+    manager._collection_cache["analytics"] = collection
+
+    await manager.get_timeseries_collection_for_database("analytics")
+    assert collection.delete_many.await_count == 1
+
+    collection.delete_many.reset_mock()
+    await manager.get_timeseries_collection_for_database("analytics")
+    collection.delete_many.assert_not_awaited()
+
+
+@pytest.mark.anyio
+async def test_get_token_collection_triggers_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure cached token collections drop expired documents and clear caches."""
+
+    manager = MongoDBManager()
+    settings = _FakeSettings()
+    settings.expiration_cleanup_interval_seconds = 0
+    monkeypatch.setattr("app.db.mongo.get_settings", lambda: settings)
+
+    collection = AsyncMock()
+    cursor = AsyncMock()
+    cursor.to_list = AsyncMock(return_value=[{"_id": "abc", "token_hash": "hash"}])
+    collection.find = MagicMock(return_value=cursor)
+    collection.delete_many = AsyncMock()
+    collection.delete_many.return_value.deleted_count = 1
+
+    manager._token_collection_cache["analytics"] = collection
+    manager._token_hash_cache["hash"] = "analytics"
+
+    await manager.get_token_collection_for_database("analytics")
+
+    collection.find.assert_called_once_with(
+        {"expires_at": {"$lte": ANY}},
+        projection={"_id": 1, "token_hash": 1},
+    )
+    cursor.to_list.assert_awaited_once_with(length=None)
+    collection.delete_many.assert_awaited_once_with({"_id": {"$in": ["abc"]}})
+    assert "hash" not in manager._token_hash_cache
+
+
+@pytest.mark.anyio
+async def test_get_token_collection_respects_cleanup_interval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ensure token cleanup is throttled by the configured interval."""
+
+    manager = MongoDBManager()
+    settings = _FakeSettings()
+    settings.expiration_cleanup_interval_seconds = 3600
+    monkeypatch.setattr("app.db.mongo.get_settings", lambda: settings)
+
+    collection = AsyncMock()
+    cursor = AsyncMock()
+    cursor.to_list = AsyncMock(return_value=[])
+    collection.find = MagicMock(return_value=cursor)
+    collection.delete_many = AsyncMock()
+
+    manager._token_collection_cache["analytics"] = collection
+
+    await manager.get_token_collection_for_database("analytics")
+    collection.find.assert_called_once()
+    cursor.to_list.assert_awaited_once_with(length=None)
+
+    collection.find.reset_mock()
+    cursor.to_list.reset_mock()
+    collection.delete_many.reset_mock()
+
+    await manager.get_token_collection_for_database("analytics")
+    collection.find.assert_not_called()
+    cursor.to_list.assert_not_called()
+    collection.delete_many.assert_not_awaited()
