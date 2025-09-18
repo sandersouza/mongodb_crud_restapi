@@ -40,7 +40,7 @@ def client_without_token(monkeypatch: pytest.MonkeyPatch) -> TestClient:
 def client(client_without_token: TestClient) -> TestClient:
     """Provide a test client with the administrator token pre-configured."""
 
-    client_without_token.headers.update({"X-API-Token": "test-admin-token"})
+    client_without_token.headers.update({"Authorization": "Bearer test-admin-token"})
     return client_without_token
 
 
@@ -64,7 +64,7 @@ def test_records_reject_invalid_token(
     monkeypatch.setattr("app.dependencies.fetch_token_metadata", fake_fetch_token_metadata)
 
     response = client_without_token.get(
-        "/api/records/search", headers={"X-API-Token": "invalid-token"}
+        "/api/records/search", headers={"Authorization": "Bearer invalid-token"}
     )
 
     assert response.status_code == 401

@@ -16,7 +16,7 @@ from .services.tokens import (
     fetch_token_metadata,
 )
 
-API_TOKEN_HEADER = "X-API-Token"
+AUTHORIZATION_HEADER = "Authorization"
 DATABASE_OVERRIDE_HEADER = "X-Database-Name"
 
 
@@ -29,10 +29,44 @@ class TokenContext:
     is_admin: bool
 
 
+def _extract_bearer_token(authorization_header: Optional[str]) -> str:
+    """Extract the token value from a ``Bearer`` authorization header."""
+
+    if authorization_header is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="API token required.")
+
+    authorization = authorization_header.strip()
+    if not authorization:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="API token required.")
+
+    scheme, _, credentials = authorization.partition(" ")
+
+    if credentials == "":
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header must be a Bearer token.",
+        )
+
+    if scheme.lower() != "bearer":
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header must be a Bearer token.",
+        )
+
+    token = credentials.strip()
+    if not token:
+        raise HTTPException(
+            status.HTTP_401_UNAUTHORIZED,
+            detail="Authorization header must be a Bearer token.",
+        )
+
+    return token
+
+
 async def get_token_context(
-    api_token: Optional[str] = Header(
+    authorization: Optional[str] = Header(
         default=None,
-        alias=API_TOKEN_HEADER,
+        alias=AUTHORIZATION_HEADER,
         convert_underscores=False,
     ),
     database_override: Optional[str] = Header(
@@ -45,17 +79,16 @@ async def get_token_context(
 
     settings = get_settings()
 
-    if not api_token:
-        raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="API token required.")
+    token = _extract_bearer_token(authorization)
 
     override = database_override.strip() if database_override else None
 
-    if api_token == settings.api_admin_token:
+    if token == settings.api_admin_token:
         database_name = override or settings.mongodb_database
-        return TokenContext(token=api_token, database_name=database_name, is_admin=True)
+        return TokenContext(token=token, database_name=database_name, is_admin=True)
 
     try:
-        metadata = await fetch_token_metadata(api_token)
+        metadata = await fetch_token_metadata(token)
     except TokenNotFoundError as error:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, detail="Invalid API token.") from error
     except TokenPersistenceError as error:
@@ -70,7 +103,7 @@ async def get_token_context(
             detail="The provided token does not grant access to the requested database.",
         )
 
-    return TokenContext(token=api_token, database_name=metadata.database, is_admin=False)
+    return TokenContext(token=token, database_name=metadata.database, is_admin=False)
 
 
 async def require_admin_context(

@@ -35,7 +35,7 @@ def admin_client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     )
 
     with TestClient(app) as test_client:
-        test_client.headers.update({"X-API-Token": "test-admin-token"})
+        test_client.headers.update({"Authorization": "Bearer test-admin-token"})
         yield test_client
 
 

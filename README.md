@@ -29,7 +29,7 @@ O parâmetro `--reload` garante que alterações no código sejam refletidas aut
 
 ## Autenticação e gerenciamento de tokens
 
-Todas as rotas sob `/api` exigem o cabeçalho `X-API-Token`. Defina um valor para `API_ADMIN_TOKEN` no arquivo `.env` para obter um token com acesso completo. Opcionalmente é possível informar `X-Database-Name` em conjunto com o token de administrador para direcionar chamadas a outra base de dados; quando omitido, a aplicação utiliza o valor de `MONGODB_DATABASE`.
+Todas as rotas sob `/api` exigem o cabeçalho `Authorization` com o esquema `Bearer`. Defina um valor para `API_ADMIN_TOKEN` no arquivo `.env` para obter um token com acesso completo. Opcionalmente é possível informar `X-Database-Name` em conjunto com o token de administrador para direcionar chamadas a outra base de dados; quando omitido, a aplicação utiliza o valor de `MONGODB_DATABASE`.
 
 Quando `ENABLE_TOKEN_CREATION_ROUTE=true`, a rota `POST /api/tokens` fica disponível (ela não aparece na documentação pública) e permite emitir novos tokens persistidos na coleção definida por `API_TOKENS_COLLECTION`. Ao criar um token para uma base inexistente, o serviço cria automaticamente o banco e a coleção time-series configurada, garantindo que as próximas requisições já encontrem a estrutura necessária.
 
@@ -37,7 +37,7 @@ Exemplo de criação de token:
 
 ```bash
 curl -X POST http://localhost:8000/api/tokens \
-  -H "X-API-Token: ${API_ADMIN_TOKEN}" \
+  -H "Authorization: Bearer ${API_ADMIN_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
         "database": "validationsplugin",
@@ -51,7 +51,7 @@ A resposta conterá o campo `token` (exibido apenas uma vez); armazene-o com seg
 
 ```bash
 curl -X POST http://localhost:8000/api/records \
-  -H "X-API-Token: <seu-token>" \
+  -H "Authorization: Bearer <seu-token>" \
   -H "Content-Type: application/json" \
   -d '{
         "acronym": "swe",
@@ -65,7 +65,7 @@ curl -X POST http://localhost:8000/api/records \
 
 ```bash
 curl \
-  -H "X-API-Token: <seu-token>" \
+  -H "Authorization: Bearer <seu-token>" \
   "http://localhost:8000/api/records/search?field=source&value=swe&latest=true"
 ```
 
@@ -73,13 +73,13 @@ Qualquer campo armazenado pode ser utilizado na busca, inclusive campos aninhado
 
 ```bash
 curl \
-  -H "X-API-Token: <seu-token>" \
+  -H "Authorization: Bearer <seu-token>" \
   "http://localhost:8000/api/records/search?field=payload.healthcheck&value=true&latest=true"
 ```
 
 ## Endpoints principais
 
-Todos os endpoints abaixo exigem o cabeçalho `X-API-Token`.
+Todos os endpoints abaixo exigem o cabeçalho `Authorization: Bearer <token>`.
 
 - `GET /healthz` — Verifica se o serviço está disponível.
 - `POST /api/records` — Insere um novo registro de série temporal.

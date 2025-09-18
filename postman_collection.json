@@ -17,6 +17,18 @@
       "value": "64b000000000000000000000",
       "type": "string",
       "description": "ObjectId usado nos exemplos de rotas que requerem um ID válido. Substitua após criar um registro."
+    },
+    {
+      "key": "apiToken",
+      "value": "",
+      "type": "string",
+      "description": "Token Bearer utilizado nas rotas de registros. Preencha com o valor recebido ao criar um token."
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string",
+      "description": "Token administrador definido em API_ADMIN_TOKEN para gerenciar credenciais."
     }
   ],
   "item": [
@@ -52,6 +64,10 @@
             "method": "POST",
             "header": [
               {
+                "key": "Authorization",
+                "value": "Bearer {{apiToken}}"
+              },
+              {
                 "key": "Content-Type",
                 "value": "application/json"
               }
@@ -83,7 +99,12 @@
           "name": "List Records",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apiToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/records?limit=10&skip=0",
               "host": [
@@ -114,7 +135,12 @@
           "name": "Get Record by ID",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apiToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/records/{{recordId}}",
               "host": [
@@ -135,6 +161,10 @@
           "request": {
             "method": "PUT",
             "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apiToken}}"
+              },
               {
                 "key": "Content-Type",
                 "value": "application/json"
@@ -168,7 +198,12 @@
           "name": "Delete Record",
           "request": {
             "method": "DELETE",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apiToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/records/{{recordId}}",
               "host": [
@@ -188,7 +223,12 @@
           "name": "Search Records",
           "request": {
             "method": "GET",
-            "header": [],
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{apiToken}}"
+              }
+            ],
             "url": {
               "raw": "{{baseUrl}}/api/records/search?field=source&value=swe&latest=true",
               "host": [
@@ -235,6 +275,61 @@
             "description": "Pesquisa registros por campo arbitrário com suporte a janela temporal. Ajuste os parâmetros conforme a necessidade."
           },
           "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tokens",
+      "item": [
+        {
+          "name": "Create Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"database\": \"validationsplugin\",\n  \"description\": \"Token de teste\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tokens",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tokens"
+              ]
+            },
+            "description": "Emite um novo token associado à base informada. Requer habilitar ENABLE_TOKEN_CREATION_ROUTE=true."
+          },
+          "response": [
+            {
+              "name": "Token criado",
+              "status": "Created",
+              "code": 201,
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\n  \"token\": \"<novo-token>\",\n  \"database\": \"validationsplugin\",\n  \"description\": \"Token de teste\",\n  \"created_at\": \"2024-01-01T00:00:00Z\",\n  \"last_used_at\": null\n}"
+            }
+          ]
         }
       ]
     }
