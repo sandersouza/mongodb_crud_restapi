@@ -1,18 +1,47 @@
-# Python caches
+# Ambiente virtual
+.venv/
+venv/
+ENV/
+env/
+
+# Pycache e arquivos temporários
 __pycache__/
 *.py[cod]
+*.pyo
+*.pyd
 
-# Environments
-.env
-.venv/
+# Arquivos de log
+*.log
 
-# Tooling
-.mypy_cache/
-.pytest_cache/
-.coverage
-htmlcov/
-
-# Editors
+# IDEs
 .vscode/
 .idea/
 
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# Testes e cobertura
+.coverage
+.scannerwork
+reports/
+htmlcov/
+.tox/
+.nox/
+
+# Docker (caso use)
+*.pid
+*.db
+*.sqlite3
+
+# Outros
+.pytest_cache
+.env
+.pem
+.key
+.crt
+.bkp
+
+# SonarQube Exclusions
+sonar-project.properties
+sonar-cacerts.jks

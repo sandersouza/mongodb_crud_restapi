@@ -1,4 +1,4 @@
-# Workflow Cross-Funcional: Rota /tokens
+# Workflow Cross-Funcional: Rota ```/tokens```
 
 ## Diagrama Mermaid
 

@@ -33,10 +33,13 @@ async def lifespan(app: FastAPI):
         await mongo_manager.close()
         logger.info("MongoDB connection closed")
 
+with open("README.md", "r", encoding="utf-8") as f:
+    readme_content = f.read()
 
 app = FastAPI(
     title=settings.app_name,
-    version="0.1.0",
+    # description=readme_content,
+    version="1.0.0",
     docs_url="/docs" if settings.environment != "production" else None,
     redoc_url="/redoc" if settings.environment != "production" else None,
     lifespan=lifespan,

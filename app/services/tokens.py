@@ -9,8 +9,35 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 
-from bson import ObjectId
-from bson.errors import InvalidId
+try:  # pragma: no cover - exercised indirectly through import guards
+    from bson import ObjectId
+    from bson.errors import InvalidId
+except ModuleNotFoundError:  # pragma: no cover - fallback for test environments
+    class InvalidId(ValueError):
+        """Exception raised when an ObjectId string is invalid."""
+
+
+    class ObjectId(str):
+        """Lightweight stand-in for ``bson.ObjectId`` used in tests.
+
+        Preserves the validation semantics for 24-character hexadecimal strings so
+        unit tests can run without the optional ``bson`` dependency installed.
+        """
+
+        def __new__(cls, value: str):
+            if not isinstance(value, str):
+                raise InvalidId("ObjectId must be created from a hex string.")
+
+            candidate = value.strip()
+            if len(candidate) != 24:
+                raise InvalidId("ObjectId hex string must be exactly 24 characters long.")
+
+            try:
+                int(candidate, 16)
+            except ValueError as error:  # pragma: no cover - defensive guard
+                raise InvalidId("ObjectId hex string contains non-hexadecimal characters.") from error
+
+            return str.__new__(cls, candidate)
 
 from ..db.mongo import MongoConnectionError, mongo_manager
 
