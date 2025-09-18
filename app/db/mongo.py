@@ -5,8 +5,27 @@ from __future__ import annotations
 import logging
 from typing import Dict, Optional, Tuple, TYPE_CHECKING
 
-from pymongo import ASCENDING
-from pymongo.errors import CollectionInvalid, PyMongoError, ServerSelectionTimeoutError
+try:  # pragma: no cover - optional dependency
+    from pymongo import ASCENDING
+    from pymongo.errors import CollectionInvalid, PyMongoError, ServerSelectionTimeoutError
+except ModuleNotFoundError:  # pragma: no cover - fallback definitions for optional dependency
+    ASCENDING = 1  # type: ignore[assignment]
+
+    class _MissingPyMongoError(RuntimeError):
+        """Base class for placeholder exceptions when PyMongo is unavailable."""
+
+    class CollectionInvalid(_MissingPyMongoError):
+        """Placeholder for :class:`pymongo.errors.CollectionInvalid`."""
+
+    class PyMongoError(_MissingPyMongoError):
+        """Placeholder for :class:`pymongo.errors.PyMongoError`."""
+
+    class ServerSelectionTimeoutError(_MissingPyMongoError):
+        """Placeholder for :class:`pymongo.errors.ServerSelectionTimeoutError`."""
+
+    _PYMONGO_AVAILABLE = False
+else:
+    _PYMONGO_AVAILABLE = True
 
 if TYPE_CHECKING:  # pragma: no cover - imported for type checking only
     from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorCollection, AsyncIOMotorDatabase
@@ -53,6 +72,11 @@ class MongoDBManager:
             raise MongoConnectionError(
                 "The 'motor' package is required to connect to MongoDB. Install it with `pip install motor`."
             ) from error
+
+        if not _PYMONGO_AVAILABLE:
+            raise MongoConnectionError(
+                "The 'pymongo' package is required to connect to MongoDB. Install it with `pip install pymongo`."
+            )
 
         connection_kwargs = {"maxPoolSize": settings.mongodb_max_pool_size}
         if settings.mongodb_username and settings.mongodb_password:

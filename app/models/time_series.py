@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_serializer
 
 
 class TimeSeriesRecordBase(BaseModel):
@@ -73,10 +73,11 @@ class TimeSeriesRecordOut(TimeSeriesRecordBase):
 
     id: str = Field(..., description="MongoDB unique identifier for the record.")
 
-    class Config:
-        """Pydantic model configuration."""
+    @field_serializer("timestamp")
+    def _serialize_timestamp(self, timestamp: datetime) -> str:
+        """Render timestamps using ISO-8601 formatting when serializing to JSON."""
 
-        json_encoders = {datetime: lambda dt: dt.isoformat()}
+        return timestamp.isoformat()
 
 
 class TimeSeriesSearchResponse(BaseModel):
