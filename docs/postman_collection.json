@@ -1,7 +1,7 @@
 {
 	"info": {
 		"_postman_id": "cba7a2a2-5336-4eeb-abad-ba50892f1ec4",
-		"name": "MongoDB CRUD API Copy",
+		"name": "MongoDB CRUD API",
 		"description": "Coleção Postman com exemplos de uso das rotas da MongoDB CRUD REST API.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
 		"_exporter_id": "7587829"
